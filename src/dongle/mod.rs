@@ -20,6 +20,7 @@
 use constants;
 use error::Error;
 use self::message::{Command, Response};
+use util::convert_ledger_der_to_compact;
 
 pub mod ledger;
 pub mod message;
@@ -43,6 +44,50 @@ pub trait Dongle {
             Err(Error::ApduBadStatus(sw))
         }
     }
+
+    /// Queries the device for a BIP32 extended pubkey
+    fn get_public_key(&mut self, bip32_path: &[u32]) -> Result<message::WalletPublicKey, Error> {
+        let command = message::GetWalletPublicKey(bip32_path);;
+        let (sw, rev) = try!(self.exchange(&command.encode()));
+        if sw == constants::apdu::ledger::sw::OK {
+            message::WalletPublicKey::decode(&rev)
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
+    /// Query the device to sign an arbitrary message
+    fn sign_message(&mut self, message: &[u8], bip32_path: &[u32]) -> Result<[u8; 64], Error> {
+        let command = message::SignMessagePrepare(bip32_path, message);
+        let (sw, rev) = try!(self.exchange(&command.encode()));
+        if sw != constants::apdu::ledger::sw::OK {
+            return Err(Error::ApduBadStatus(sw));
+        }
+
+        if rev != &[0, 0] {
+            panic!("Ledger requested user authentication but we don't know how to handle that");
+        }
+
+        let command = message::SignMessageSign;
+        let (sw, rev) = try!(self.exchange(&command.encode()));
+        if sw == constants::apdu::ledger::sw::OK {
+            convert_ledger_der_to_compact(&rev)
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
+    /// Query the device for up to 255 random bytes
+    fn get_random(&mut self, n: u8) -> Result<Vec<u8>, Error> {
+        let command = message::GetRandom(n);
+        let (sw, rev) = try!(self.exchange(&command.encode()));
+        if sw == constants::apdu::ledger::sw::OK {
+            Ok(rev)
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
 }
 
 /// Enum representing the different devices we support

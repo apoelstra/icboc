@@ -28,13 +28,18 @@
 #![deny(missing_docs)]
 
 extern crate byteorder;
+extern crate crypto;
+#[macro_use] extern crate log;
 extern crate hex;
 extern crate hid;
-#[macro_use] extern crate log;
+extern crate secp256k1;
+extern crate time;
 
 pub mod constants;
 pub mod dongle;
 pub mod error;
+pub mod util;
+pub mod wallet;
 
 #[cfg(test)]
 mod tests {

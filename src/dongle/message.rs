@@ -18,6 +18,10 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
+use secp256k1::{Secp256k1, ContextFlag};
+use secp256k1::key::PublicKey;
+use byteorder::{WriteBytesExt, BigEndian};
+
 use constants::apdu;
 use error::Error;
 
@@ -108,4 +112,126 @@ impl Response for FirmwareVersion {
         })
     }
 }
+
+/// GET WALLET PUBLIC KEY  message
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct GetWalletPublicKey<'a>(pub &'a [u32]);
+
+impl<'a> Command for GetWalletPublicKey<'a> {
+    fn encode(&self) -> Vec<u8> {
+        assert!(self.0.len() > 0);
+        assert!(self.0.len() < 11);  // limitation of the Nano S
+
+        let mut ret = Vec::with_capacity(5 + 4 * self.0.len());
+        ret.push(apdu::ledger::BTCHIP_CLA);
+        ret.push(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY);
+        ret.push(0);
+        ret.push(0);
+        ret.push((1 + 4 * self.0.len()) as u8);
+        ret.push(self.0.len() as u8);
+        for childnum in self.0 {
+            let _ = ret.write_u32::<BigEndian>(*childnum);
+        }
+        ret
+    }
+}
+
+/// Response to the GET WALLET PUBLIC KEY message
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalletPublicKey {
+    /// The EC public key
+    pub public_key: PublicKey,
+    /// The base58-encoded address corresponding to the public key
+    pub b58_address: String,
+    /// The BIP32 chaincode associated to this key
+    pub chaincode: [u8; 32]
+}
+
+impl Response for WalletPublicKey {
+    fn decode(data: &[u8]) -> Result<WalletPublicKey, Error> {
+        let secp = Secp256k1::with_caps(ContextFlag::None);
+
+        let pk_len = data[0] as usize;
+        if 2 + pk_len > data.len() {
+            return Err(Error::UnexpectedEof);
+        }
+        let pk = try!(PublicKey::from_slice(&secp, &data[1..1+pk_len]));
+
+        let addr_len = data[1 + pk_len] as usize;
+        if 2 + pk_len + addr_len + 32 != data.len() {
+            return Err(Error::ResponseWrongLength(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY, data.len()));
+        }
+        let addr = try!(String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned()));
+
+        let mut ret = WalletPublicKey {
+            public_key: pk,
+            b58_address: addr,
+            chaincode: [0; 32]
+        };
+        ret.chaincode.clone_from_slice(&data[2 + pk_len + addr_len..]);
+        Ok(ret)
+    }
+}
+
+/// SIGN MESSAGE prepare message
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct SignMessagePrepare<'a>(pub &'a [u32], pub &'a [u8]);
+
+impl<'a> Command for SignMessagePrepare<'a> {
+    fn encode(&self) -> Vec<u8> {
+        assert!(self.0.len() > 0);
+        assert!(self.0.len() < 11);  // limitation of the Nano S
+        assert!(self.1.len() < 213); // limitation of this sw, lets us fit prepare into a single message
+
+        let mut ret = Vec::with_capacity(5 + 4 * self.0.len());
+        ret.push(apdu::ledger::BTCHIP_CLA);
+        ret.push(apdu::ledger::ins::SIGN_MESSAGE);
+        ret.push(0x00);  // preparing...
+        ret.push(0x01);  // ...the first (and only, for us) part of the message
+        ret.push((1 + 4 * self.0.len() + 2 + self.1.len()) as u8);
+        ret.push(self.0.len() as u8);
+        for childnum in self.0 {
+            let _ = ret.write_u32::<BigEndian>(*childnum);
+        }
+        ret.push(0);
+        ret.push(self.1.len() as u8);
+        ret.extend(self.1);
+        ret
+    }
+}
+
+/// SIGN MESSAGE sign message
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct SignMessageSign;
+
+impl Command for SignMessageSign {
+    fn encode(&self) -> Vec<u8> {
+        vec![
+            apdu::ledger::BTCHIP_CLA,
+            apdu::ledger::ins::SIGN_MESSAGE,
+            0x80, // signing
+            0x00, // irrelevant
+            0x01, // no user authentication needed
+            0x00
+        ]
+    }
+}
+
+/// GET RANDOM message
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct GetRandom(pub u8);
+
+impl Command for GetRandom {
+    fn encode(&self) -> Vec<u8> {
+        vec![
+            apdu::ledger::BTCHIP_CLA,
+            apdu::ledger::ins::GET_RANDOM,
+            0x00, 0x00, self.0
+        ]
+    }
+}
+
+
+
+
 

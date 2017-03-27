@@ -55,7 +55,7 @@ impl Dongle for HardDongle {
     fn exchange(&mut self, msg: &[u8]) -> Result<(u16, Vec<u8>), Error> {
         let handle = self.handle.as_mut().unwrap();
         try!(write_apdu(handle, msg));
-        let mut ret = try!(read_apdu(handle, Duration::from_secs(10)));  // TODO make 10sec configurable
+        let mut ret = try!(read_apdu(handle, Duration::from_secs(120)));  // TODO make 2min configurable
         let sw2 = ret.pop();
         let sw1 = ret.pop();
         match (sw1, sw2) {
