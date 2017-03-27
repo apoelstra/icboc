@@ -1,0 +1,19 @@
+[package]
+name = "icebox"
+version = "0.1.0"
+authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "icebox"
+path = "src/main.rs"
+
+[dependencies]
+byteorder = "1.0"
+env_logger = "0.4"
+hex = "0.2"
+hid = "0.3"
+log = "0.3"
+
