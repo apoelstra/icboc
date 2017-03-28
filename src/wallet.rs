@@ -185,6 +185,7 @@ impl EncryptedWallet {
         let key = dongle.get_public_key(&bip32_path(self.account, KeyPurpose::Address, index as u32))?;
         let entry = Entry {
             state: EntryState::Valid,
+            trusted_input: [0; 56],
             address: key.b58_address,
             index: index,
             txid: [0; 32],
@@ -221,26 +222,28 @@ pub enum EntryState {
 /// Structure representing a decrypted entry
 ///
 /// The full byte format is
-/// +------------+-----------------------------------------+----------+--------+
-/// | Field      | Description                             | Size     | Offset |
-/// +------------+-----------------------------------------+----------+--------|
-/// | Txid       | TXID of first output using this address | 32 bytes | 0      |
-/// | vout       | vout of said output, big endian         |  4 bytes | 32     |
-/// | Amount     | Amount of said output, big endian       |  8 bytes | 36     |
-/// | Signature  | Sig w address of all fields from "Date" | 64 bytes | 44     |
-/// | Date       | ASCII bytes YYYY-MM-DD HH:MM:SS+ZZZZ    | 24 bytes | 108    |
-/// | Blockhash  | Recent blockhash, big endian            | 32 bytes | 132    |
-/// | User ID    | Freeform, zero-padded, expected ASCII   | 32 bytes | 164    |
-/// | Note       | Freeform, zero-padded, expected ASCII   | 60 bytes | 196    |
-/// +------------+-----------------------------------------+----------+--------+
+/// +------------+-----------------------------------------+-----------+--------+
+/// | Field      | Description                             | Size      | Offset |
+/// +------------+-----------------------------------------+-----------+--------|
+/// | Signature  | Sig w address of all following fields   |  64 bytes | 0      |
+/// | Trusted In | "Trusted Input" to send to dongle       |  56 bytes | 64     |
+/// | Txid       | TXID of first output using this address |  32 bytes | 120    |
+/// | vout       | vout of said output, big endian         |   4 bytes | 152    |
+/// | Amount     | Amount of said output, big endian       |   8 bytes | 156    |
+/// | Date       | ASCII bytes YYYY-MM-DD HH:MM:SS+ZZZZ    |  24 bytes | 164    |
+/// | Blockhash  | Recent blockhash, big endian            |  32 bytes | 188    |
+/// | User ID    | Freeform, zero-padded, expected ASCII   |  32 bytes | 220    |
+/// | Note       | Freeform, zero-padded, expected ASCII   |  68 bytes | 252    |
+/// +------------+-----------------------------------------+-----------+--------+
 ///
-/// Total: 256 bytes
-/// Total signed: 148 bytes
+/// Total: 320 bytes
+/// Total signed: 256 bytes
 ///
-#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Entry {
     /// The overall state of this entry
     pub state: EntryState,
+    /// The "trusted input", a txid:vout:amount triple encrypted for the dongle by itself
+    trusted_input: [u8; 56],
     /// The base58-encoded address of this entry
     pub address: String,
     /// The BIP32 index of this entry
@@ -265,24 +268,24 @@ impl Entry {
     /// Encode an entry, sign the second half of it, and embed the signature in the entry
     fn sign_and_encrypt<D: Dongle>(&self, dongle: &mut D, account: u32, index: usize) -> Result<[u8; ENCRYPTED_ENTRY_SIZE], Error> {
         let mut input = [0; DECRYPTED_ENTRY_SIZE];
-        // Copy out the unsigned data
-        input[0..32].copy_from_slice(&self.txid);
-        BigEndian::write_u32(&mut input[32..36], self.vout);
-        BigEndian::write_u64(&mut input[36..44], self.amount);
-        // Then the signed data
-        input[108..132].copy_from_slice(&self.date);
-        input[132..164].copy_from_slice(&self.blockhash);
-        input[164..164 + self.user.as_bytes().len()].copy_from_slice(self.user.as_bytes());
-        input[196..196 + self.note.as_bytes().len()].copy_from_slice(self.note.as_bytes());
+        // Copy out the signed data
+        input[64..120].copy_from_slice(&self.trusted_input);
+        input[120..152].copy_from_slice(&self.txid);
+        BigEndian::write_u32(&mut input[152..156], self.vout);
+        BigEndian::write_u64(&mut input[156..164], self.amount);
+        input[164..188].copy_from_slice(&self.date);
+        input[188..220].copy_from_slice(&self.blockhash);
+        input[220..220 + self.user.as_bytes().len()].copy_from_slice(self.user.as_bytes());
+        input[252..252 + self.note.as_bytes().len()].copy_from_slice(self.note.as_bytes());
         // Now sign it
         let sig = {
-            let to_sign = &input[108..256];
+            let to_sign = &input[64..320];
 
             println!("The dongle will ask you to sign hash {}", hash_sha256(to_sign).to_hex());
             println!("This is the SHA256 of data {}", to_sign.to_hex());
             dongle.sign_message(to_sign, &bip32_path(account, KeyPurpose::Address, index as u32))?
         };
-        input[44..108].copy_from_slice(&sig);
+        input[0..64].copy_from_slice(&sig);
 
         // AES-encrypt the whole thing
         let mut ret = [0; ENCRYPTED_ENTRY_SIZE];
@@ -298,6 +301,7 @@ impl Entry {
         if data.iter().all(|x| *x == 0) {
             Ok(Entry {
                 state: EntryState::Unused,
+                trusted_input: [0; 56],
                 address: String::new(),
                 index: 0,
                 txid: [0; 32],
@@ -312,30 +316,31 @@ impl Entry {
             let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::Address, index as u32))?;
 
             let secp = Secp256k1::with_caps(ContextFlag::VerifyOnly);
-            let sig = convert_compact_to_secp(&data[44..108])?;
-            let mut msg_full = vec![0; 174];
-            // nb the x18 here is the length of "Bitcoin Signed Message:\n", the x94 is the length of the rest
-            msg_full[0..26].copy_from_slice(b"\x18Bitcoin Signed Message:\n\x94");
-            msg_full[26..174].copy_from_slice(&data[108..256]);
+            let sig = convert_compact_to_secp(&data[0..64])?;
+            let mut msg_full = vec![0; 284];
+            // nb the x18 here is the length of "Bitcoin Signed Message:\n", the xfdx00x01 is the length of the rest
+            msg_full[0..28].copy_from_slice(b"\x18Bitcoin Signed Message:\n\xfd\x00\x01");
+            msg_full[28..284].copy_from_slice(&data[64..320]);
             let msg_hash = hash_sha256(&hash_sha256(&msg_full));
             let msg = secp256k1::Message::from_slice(&msg_hash).unwrap();
             let verified = secp.verify(&msg, &sig, &key.public_key).is_ok();
 
-            let mut txid = [0; 32]; txid.clone_from_slice(&data[0..32]);
-            let mut date = [0; 24]; date.clone_from_slice(&data[108..132]);
-            let mut hash = [0; 32]; hash.clone_from_slice(&data[132..164]);
+            let mut txid = [0; 32]; txid.clone_from_slice(&data[120..152]);
+            let mut date = [0; 24]; date.clone_from_slice(&data[164..188]);
+            let mut hash = [0; 32]; hash.clone_from_slice(&data[188..220]);
 
             Ok(Entry {
                 state: if verified { EntryState::Valid } else { EntryState::Invalid },
+                trusted_input: [0; 56],
                 address: key.b58_address,
                 index: index,
                 txid: txid,
-                vout: BigEndian::read_u32(&data[32..36]),
-                amount: BigEndian::read_u64(&data[36..44]),
+                vout: BigEndian::read_u32(&data[152..156]),
+                amount: BigEndian::read_u64(&data[156..164]),
                 date: date,
-                user: String::from_utf8(data[164..196].to_owned())?,
+                user: String::from_utf8(data[220..252].to_owned())?,
                 blockhash: hash,
-                note: String::from_utf8(data[196..256].to_owned())?
+                note: String::from_utf8(data[252..320].to_owned())?
             })
         }
     }

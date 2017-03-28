@@ -69,9 +69,9 @@ pub mod wallet {
     /// First five bytes are guaranteed random: used `wget boards.4chan.org/b/ -O - | sha256sum` to compute
     pub const MAGIC: u64 = 0x96e88001;
     /// Size, in bytes, of the data block for each entry.
-    pub const DECRYPTED_ENTRY_SIZE: usize = 256;
+    pub const DECRYPTED_ENTRY_SIZE: usize = 320;
     /// Size, in bytes, of the AES-CTR-encrypted data block.
-    pub const ENCRYPTED_ENTRY_SIZE: usize = 288;
+    pub const ENCRYPTED_ENTRY_SIZE: usize = 352;
     /// Maximum length in bytes of the user ID field
     pub const MAX_USER_ID_BYTES: usize = 32;
     /// Maximum length in bytes of the freeform note field
