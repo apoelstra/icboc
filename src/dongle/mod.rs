@@ -29,15 +29,15 @@ pub mod message;
 pub trait Dongle {
     /// Sends raw data to the device and returns its response, which is a pair
     /// (status word, raw bytes). Generally this function is never used directly.
-    fn exchange(&mut self, data: &[u8]) -> Result<(u16, Vec<u8>), Error>;
+    fn exchange<C: Command>(&mut self, cmd: C) -> Result<(u16, Vec<u8>), Error>;
 
     /// Returns the type of the device
     fn product(&self) -> Product;
 
     /// Queries the device for its firmware version
     fn get_firmware_version(&mut self) -> Result<message::FirmwareVersion, Error> {
-        let command = message::GetFirmwareVersion;
-        let (sw, rev) = try!(self.exchange(&command.encode()));
+        let command = message::GetFirmwareVersion::new();
+        let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             message::FirmwareVersion::decode(&rev)
         } else {
@@ -47,8 +47,8 @@ pub trait Dongle {
 
     /// Queries the device for a BIP32 extended pubkey
     fn get_public_key(&mut self, bip32_path: &[u32]) -> Result<message::WalletPublicKey, Error> {
-        let command = message::GetWalletPublicKey(bip32_path);;
-        let (sw, rev) = try!(self.exchange(&command.encode()));
+        let command = message::GetWalletPublicKey::new(bip32_path);;
+        let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             message::WalletPublicKey::decode(&rev)
         } else {
@@ -58,8 +58,8 @@ pub trait Dongle {
 
     /// Query the device to sign an arbitrary message
     fn sign_message(&mut self, message: &[u8], bip32_path: &[u32]) -> Result<[u8; 64], Error> {
-        let command = message::SignMessagePrepare(bip32_path, message);
-        let (sw, rev) = try!(self.exchange(&command.encode()));
+        let command = message::SignMessagePrepare::new(bip32_path, message);
+        let (sw, rev) = try!(self.exchange(command));
         if sw != constants::apdu::ledger::sw::OK {
             return Err(Error::ApduBadStatus(sw));
         }
@@ -68,8 +68,8 @@ pub trait Dongle {
             panic!("Ledger requested user authentication but we don't know how to handle that");
         }
 
-        let command = message::SignMessageSign;
-        let (sw, rev) = try!(self.exchange(&command.encode()));
+        let command = message::SignMessageSign::new();
+        let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             convert_ledger_der_to_compact(&rev)
         } else {
@@ -79,8 +79,8 @@ pub trait Dongle {
 
     /// Query the device for up to 255 random bytes
     fn get_random(&mut self, n: u8) -> Result<Vec<u8>, Error> {
-        let command = message::GetRandom(n);
-        let (sw, rev) = try!(self.exchange(&command.encode()));
+        let command = message::GetRandom::new(n);
+        let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             Ok(rev)
         } else {

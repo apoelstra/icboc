@@ -25,6 +25,7 @@ use std::cmp;
 use std::time::Duration;
 
 use constants;
+use dongle::message::Command;
 use error::Error;
 
 use super::{Dongle, Product};
@@ -52,19 +53,14 @@ impl Dongle for HardDongle {
         self.product
     }
 
-    fn exchange(&mut self, msg: &[u8]) -> Result<(u16, Vec<u8>), Error> {
+    fn exchange<C: Command>(&mut self, mut cmd: C) -> Result<(u16, Vec<u8>), Error> {
         let handle = self.handle.as_mut().unwrap();
-        try!(write_apdu(handle, msg));
-        let mut ret = try!(read_apdu(handle, Duration::from_secs(120)));  // TODO make 2min configurable
-        let sw2 = ret.pop();
-        let sw1 = ret.pop();
-        match (sw1, sw2) {
-            (Some(sw1), Some(sw2)) => {
-                let sw = ((sw1 as u16) << 8) + sw2 as u16;
-                Ok((sw, ret))
-            }
-            _ => Err(Error::UnexpectedEof)
+        while let Some(msg) = cmd.encode_next() {
+            write_apdu(handle, &msg)?;
+            let reply = read_apdu(handle, Duration::from_secs(120))?;  // TODO make 2min configurable
+            cmd.decode_reply(reply)?
         }
+        Ok(cmd.into_reply())
     }
 }
 

@@ -56,6 +56,8 @@ pub enum Error {
     EntryOutOfRange(usize),
     /// Received an unparseable signature
     BadSignature,
+    /// The dongle requested we do something unsupported
+    Unsupported,
     /// Received APDU frame of shorter than expected length
     UnexpectedEof
 }
@@ -115,6 +117,7 @@ impl error::Error for Error {
             Error::NoteTooLong(_, _) => "note too long",
             Error::EntryOutOfRange(_) => "tried to access entry outside of wallet",
             Error::BadSignature => "unparseable signature",
+            Error::Unsupported => "we were asked to do something unsupported",
             Error::UnexpectedEof => "unexpected end of data"
         }
     }
