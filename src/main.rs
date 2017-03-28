@@ -45,10 +45,10 @@ fn user_prompt(prompt: &str) -> String {
 
 /// Prints the usage information and then halts the program
 fn usage_and_die(name: &str) -> ! {
-    println!("Usage:");
-    println!("  {} init <filename> <account> <n_entries>", name);
-    println!("  {} info <wallet filename> [address index]", name);
-    println!("  {} getaddress <wallet filename> [address index]", name);
+    println!("Usage: {} <wallet filename> <command>", name);
+    println!("  {} <filename> init <account> <n_entries>", name);
+    println!("  {} <filename> info [address index]", name);
+    println!("  {} <filename> getaddress [address index]", name);
     // TODO: extend wallet
     process::exit(1);
 }
@@ -95,7 +95,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     match args.len() {
         0 => usage_and_die(""),
-        1 => usage_and_die(&args[0]),
+        1 | 2 => usage_and_die(&args[0]),
         _ => {}
     }
 
@@ -107,14 +107,14 @@ fn main() {
     println!("Firmware version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
 
     // Decide what to do
-    match &args[1][..] {
+    match &args[2][..] {
         // Create a new wallet
         "init" => {
             if args.len() < 5 {
                 usage_and_die(&args[0]);
             }
 
-            let filename = &args[2];
+            let filename = &args[1];
             let account = u32::from_str(&args[3]).expect("Parsing account as number");
             let entries = usize::from_str(&args[4]).expect("Parsing n_entries as number");
 
@@ -133,7 +133,7 @@ fn main() {
                 usage_and_die(&args[0]);
             }
 
-            let filename = &args[2];
+            let filename = &args[1];
             let wallet = pretty_unwrap("Loading wallet",
                                        icebox::wallet::EncryptedWallet::load(filename));
             println!("Wallet: {} entries, account {}.", wallet.n_entries(), wallet.account());
@@ -149,7 +149,7 @@ fn main() {
                 usage_and_die(&args[0]);
             }
 
-            let filename = &args[2];
+            let filename = &args[1];
             let mut wallet = pretty_unwrap("Loading wallet",
                                            icebox::wallet::EncryptedWallet::load(filename));
             let index;

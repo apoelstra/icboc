@@ -24,11 +24,11 @@ database of information about addresses that have been used.
 To generate a new wallet, choose a BIP44 account number and a number of
 address to support initially.
 
-    icebox init wallet.icebox.dat 0 100
+    icebox wallet.icebox.dat init 0 100
 
 To get a new address, do
 
-    icebox getaddress wallet.icebox.dat
+    icebox wallet.icebox.dat getaddress
 
 This will prompt you for some information and eventually output an address
 entry:
@@ -44,7 +44,7 @@ entry:
 
 You can retrieve this at any time by using its index:
 
-    icebox info wallet.icebox.dat 0
+    icebox wallet.icebox.dat info 0
 
 ## Version 1
 
