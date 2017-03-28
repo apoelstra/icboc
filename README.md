@@ -19,6 +19,33 @@ the address information so that the size of the wallet file never changes.
 All keys are stored on the dongle; what the "wallet" stores on the PC is a
 database of information about addresses that have been used.
 
+## Usage
+
+To generate a new wallet, choose a BIP44 account number and a number of
+address to support initially.
+
+    icebox init wallet.icebox.dat 0 100
+
+To get a new address, do
+
+    icebox getaddress wallet.icebox.dat
+
+This will prompt you for some information and eventually output an address
+entry:
+
+    Signed Entry:
+       index: 0
+     address: 1CptY69DsTdbjLYfanMtwNWZNbDDmSJFjn
+        txid: no associated output
+     created: 2017-03-28 14:37:34-0000
+     (after): 0000000000000000005f6cd977d679024084ec3400f3dbeadab19ca4f9e107ef
+        user: apoelstra@home
+        note: Hiya, this is my note
+
+You can retrieve this at any time by using its index:
+
+    icebox info wallet.icebox.dat 0
+
 ## Version 1
 
 The first version of Icebox is designed to work with the Bitcoin app that comes
