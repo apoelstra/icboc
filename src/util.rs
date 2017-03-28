@@ -91,9 +91,6 @@ pub fn convert_ledger_der_to_compact(sig: &[u8]) -> Result<[u8; 64], Error> {
         ret[0..32].copy_from_slice(&sig[r_off + 1..r_off + r_len]);
         ret[32..64].copy_from_slice(&s_sk[..]);
     }
-    use hex::ToHex;
-    println!("Convert {}", (&sig[..]).to_hex());
-    println!("     To {}", (&ret[..]).to_hex());
     Ok(ret)
 }
 
@@ -109,9 +106,6 @@ pub fn convert_compact_to_secp(sig: &[u8]) -> Result<Signature, Error> {
     rv[36] = 0x02; // Integer (s)
     rv[37] = 0x20; // Length of Integer (s)
     rv[38..70].copy_from_slice(&sig[32..64]);  // s
-    use hex::ToHex;
-    println!("Convert {}", (&sig[..]).to_hex());
-    println!("     To {}", (&rv[..]).to_hex());
     let mut sig = Signature::from_der_lax(&secp, &rv)?;
     sig.normalize_s(&secp);
     Ok(sig)
