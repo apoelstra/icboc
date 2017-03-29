@@ -35,7 +35,10 @@ pub mod apdu {
     pub mod ledger {
         pub const DEFAULT_CHANNEL: u16 = 0x0101;
         pub const TAG_APDU: u8 = 0x05;
+        /// Maximum size an individual HID message can be
         pub const PACKET_SIZE: usize = 64;
+        /// Maximum size a full APDU (split across HID frames) can be
+        pub const MAX_APDU_SIZE: usize = 255 + 5; // from nanos-secure-sdk/include/os.h IO_APDU_BUFFER_SIZE
 
         pub const BTCHIP_CLA: u8 = 0xe0;
 
@@ -43,6 +46,7 @@ pub mod apdu {
         pub mod ins {
             pub const GET_FIRMWARE_VERSION: u8 = 0xc4;
             pub const GET_WALLET_PUBLIC_KEY: u8 = 0x40;
+            pub const GET_TRUSTED_INPUT: u8 = 0x42;
             pub const SIGN_MESSAGE: u8 = 0x4e;
             pub const GET_RANDOM: u8 = 0xc0;
         }
@@ -56,6 +60,7 @@ pub mod apdu {
             pub const INS_NOT_SUPPORTED: u16 = 0x6D00;
             pub const DONGLE_LOCKED: u16 = 0x6982;
             pub mod exception {
+                pub const EXCEPTION: u16 = 0x6F01;
                 pub const INVALID_PARAMETER: u16 = 0x6F02;
                 pub const HALTED: u16 = 0x6FAA;
             }

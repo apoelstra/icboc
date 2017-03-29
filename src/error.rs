@@ -14,12 +14,15 @@
 //! # Error Handling
 
 use std::{error, fmt, io, string};
+use bitcoin::util::base58;
 use hid;
 use secp256k1;
 
 /// Ice Box error
 #[derive(Debug)]
 pub enum Error {
+    /// Error in Base58 decoding
+    Base58(base58::Error),
     /// Error from hidapi
     Hid(hid::Error),
     /// std io error
@@ -62,6 +65,12 @@ pub enum Error {
     UnexpectedEof
 }
 
+impl From<base58::Error> for Error {
+    fn from(e: base58::Error) -> Error {
+        Error::Base58(e)
+    }
+}
+
 impl From<hid::Error> for Error {
     fn from(e: hid::Error) -> Error {
         Error::Hid(e)
@@ -89,6 +98,7 @@ impl From<string::FromUtf8Error> for Error {
 impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
+            Error::Base58(ref e) => Some(e),
             Error::Hid(ref e) => Some(e),
             Error::Io(ref e) => Some(e),
             Error::Secp(ref e) => Some(e),
@@ -99,6 +109,7 @@ impl error::Error for Error {
 
     fn description(&self) -> &str {
         match *self {
+            Error::Base58(ref e) => error::Error::description(e),
             Error::Hid(ref e) => error::Error::description(e),
             Error::Io(ref e) => error::Error::description(e),
             Error::Secp(ref e) => error::Error::description(e),
@@ -126,6 +137,7 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::Base58(ref e) => fmt::Display::fmt(e, f),
             Error::Hid(ref e) => fmt::Display::fmt(e, f),
             Error::Io(ref e) => fmt::Display::fmt(e, f),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),

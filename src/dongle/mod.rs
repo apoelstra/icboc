@@ -17,6 +17,8 @@
 //! Abstract API for communicating with the device
 //!
 
+use bitcoin::blockdata::transaction::Transaction;
+
 use constants;
 use error::Error;
 use self::message::{Command, Response};
@@ -88,6 +90,19 @@ pub trait Dongle {
         }
     }
 
+    /// Query the device for a trusted input
+    fn get_trusted_input(&mut self, tx: &Transaction, vout: u32) -> Result<Vec<u8>, Error> {
+        let command = message::GetTrustedInput::new(tx, vout, constants::apdu::ledger::MAX_APDU_SIZE);
+        let (sw, rev) = try!(self.exchange(command));
+        if rev.len() != 56 {
+            return Err(Error::ResponseWrongLength(constants::apdu::ledger::ins::GET_TRUSTED_INPUT, rev.len()));
+        }
+        if sw == constants::apdu::ledger::sw::OK {
+            Ok(rev)
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
 }
 
 /// Enum representing the different devices we support

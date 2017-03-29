@@ -17,6 +17,10 @@
 //! Support for the "wallet" which is really more of an audit log
 //!
 
+use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::network::serialize::BitcoinHash;
+use bitcoin::util::address::Address;
+use bitcoin::util::base58::FromBase58;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt, BigEndian};
 use crypto::aes;
 use hex::ToHex;
@@ -200,6 +204,40 @@ impl EncryptedWallet {
         self.entries[index] = entry.sign_and_encrypt(dongle, self.account, index)?;
 
         Ok(entry)
+    }
+
+    /// Process a transaction which claims to send coins to this wallet,
+    /// finding all output which send coins to us
+    pub fn receive<D: Dongle>(&mut self, dongle: &mut D, tx: &Transaction) -> Result<(), Error> {
+        let txid = tx.bitcoin_hash();
+
+        for i in 0..self.entries.len() {
+            let mut entry = self.lookup(dongle, i)?;
+            match entry.state {
+                EntryState::Unused => {},
+                EntryState::Invalid => {
+                    warn!("Entry {} has a bad signature, ignoring any spends to it.", i);
+                }
+                EntryState::Valid => {
+                    // TODO check that entry is not already used
+                    let address: Address = FromBase58::from_base58check(&entry.address)?;
+                    let spk = address.script_pubkey();
+                    for (vout, out) in tx.output.iter().enumerate() {
+                        if out.script_pubkey == spk {
+                            println!("Receive to entry {}. Amount {}, outpoint {}:{}!", i, out.value, txid, vout);
+                            let trusted_input = dongle.get_trusted_input(tx, vout as u32)?;
+                            entry.trusted_input.copy_from_slice(&trusted_input[..]);
+                            entry.txid.copy_from_slice(&txid[..]);
+                            entry.txid.reverse();  // lol bitcoin
+                            entry.vout = vout as u32;
+                            entry.amount = out.value;
+                            self.entries[i] = entry.sign_and_encrypt(dongle, self.account, i)?;
+                        }
+                    } // end txo loop
+                }
+            } // end match
+        } // end entries loop
+        Ok(())
     }
 
     /// Accessor for the account number

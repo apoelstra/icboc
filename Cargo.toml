@@ -11,6 +11,7 @@ name = "icebox"
 path = "src/main.rs"
 
 [dependencies]
+bitcoin = "0.9"
 byteorder = "1.0"
 rust-crypto = "0.2"
 env_logger = "0.4"

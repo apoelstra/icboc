@@ -18,13 +18,15 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
+use bitcoin::blockdata::transaction::Transaction;
+use byteorder::{WriteBytesExt, BigEndian};
 use secp256k1::{Secp256k1, ContextFlag};
 use secp256k1::key::PublicKey;
-use byteorder::{WriteBytesExt, BigEndian};
 use std::cmp;
 
 use constants::apdu;
 use error::Error;
+use util::encode_transaction_with_cutpoints;
 
 /// A message that can be received from the dongle
 pub trait Response: Sized {
@@ -36,7 +38,7 @@ pub trait Response: Sized {
 pub trait Command {
     /// Encodes the next APDU as a byte string, or None if there are no remaining
     /// APDUs to send
-    fn encode_next(&mut self) -> Option<Vec<u8>>;
+    fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>>;
 
     /// Used to update a (potentially multipart) reply
     fn decode_reply(&mut self, data: Vec<u8>) -> Result<(), Error>;
@@ -65,7 +67,7 @@ impl GetFirmwareVersion {
 }
 
 impl Command for GetFirmwareVersion {
-    fn encode_next(&mut self) -> Option<Vec<u8>> {
+    fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             None
         } else {
@@ -180,7 +182,7 @@ impl<'a> GetWalletPublicKey<'a> {
 }
 
 impl<'a> Command for GetWalletPublicKey<'a> {
-    fn encode_next(&mut self) -> Option<Vec<u8>> {
+    fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;
         }
@@ -279,7 +281,7 @@ impl<'a> SignMessagePrepare<'a> {
 }
 
 impl<'a> Command for SignMessagePrepare<'a> {
-    fn encode_next(&mut self) -> Option<Vec<u8>> {
+    fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent_length > self.message.len() {
             unreachable!();  // sanity check
         }
@@ -292,7 +294,7 @@ impl<'a> Command for SignMessagePrepare<'a> {
             let (packet_len, message_len) = {
                 let header_len = 5;
                 let init_data_len = 1 + 4 * self.bip32_path.len() + 2;
-                let space = apdu::ledger::PACKET_SIZE - init_data_len - header_len;
+                let space = apdu_size - init_data_len - header_len;
                 let message_len = cmp::min(space, self.message.len());
                 (init_data_len + message_len, message_len)
             };
@@ -313,7 +315,7 @@ impl<'a> Command for SignMessagePrepare<'a> {
         // Subsequent messages, much simpler
         } else {
             let remaining_len = self.message.len() - self.sent_length;
-            let packet_len = cmp::min(apdu::ledger::PACKET_SIZE - 5, remaining_len);
+            let packet_len = cmp::min(apdu_size - 5, remaining_len);
 
             let mut ret = Vec::with_capacity(5 + packet_len);
             ret.push(apdu::ledger::BTCHIP_CLA);
@@ -370,7 +372,7 @@ impl SignMessageSign {
 }
 
 impl Command for SignMessageSign {
-    fn encode_next(&mut self) -> Option<Vec<u8>> {
+    fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             None
         } else {
@@ -424,7 +426,7 @@ impl GetRandom {
 }
 
 impl Command for GetRandom {
-    fn encode_next(&mut self) -> Option<Vec<u8>> {
+    fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             None
         } else {
@@ -452,6 +454,96 @@ impl Command for GetRandom {
         (self.sw, self.reply)
     }
 }
+
+
+/// GET RANDOM message
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GetTrustedInput {
+    sent_cuts: usize,
+    reply: Vec<u8>,
+    sw: u16,
+    ser_tx: Vec<u8>,
+    cuts: Vec<usize>,
+    vout: u32
+}
+
+impl GetTrustedInput {
+    /// Constructor: ser_tx is the full transaction, vout is the index of the output we care about
+    pub fn new(tx: &Transaction, vout: u32, apdu_size: usize) -> GetTrustedInput {
+        let (ser_tx, cuts) = encode_transaction_with_cutpoints(tx, apdu_size);
+        GetTrustedInput {
+            sent_cuts: 0,
+            reply: vec![],
+            sw: 0,
+            ser_tx: ser_tx,
+            cuts: cuts,
+            vout: vout
+        }
+    }
+}
+
+impl Command for GetTrustedInput {
+    fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
+        if self.sent_cuts >= self.cuts.len() {
+            unreachable!();  // sanity check
+        }
+        // We are always looking one cut ahead (and have an extra
+        // "cut" at self.ser_tx.len() for this reason).
+        if self.sent_cuts == self.cuts.len() - 1 {
+            return None;
+        }
+
+        let mut ret = Vec::with_capacity(apdu_size);
+        ret.push(apdu::ledger::BTCHIP_CLA);
+        ret.push(apdu::ledger::ins::GET_TRUSTED_INPUT);
+        if self.sent_cuts == 0 {
+            ret.push(0x00);
+            ret.push(0x00);
+            ret.push(0x00);  // Will overwrite this with final length
+            let _ = ret.write_u32::<BigEndian>(self.vout);
+        } else {
+            ret.push(0x80);
+            ret.push(0x00);
+            ret.push(0x00);  // Will overwrite this with final length
+        }
+
+        // Put as many transaction cuts as we can into the message
+        let mut next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
+        while ret.len() + next_cut_len < apdu_size {
+            ret.extend(&self.ser_tx[self.cuts[self.sent_cuts]..self.cuts[self.sent_cuts + 1]]);
+            self.sent_cuts += 1;
+            if self.sent_cuts < self.cuts.len() - 1 {
+                next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
+            } else {
+                break;
+            }
+        }
+
+        // Mark size and return
+        assert!(ret.len() < apdu_size);
+        ret[4] = (ret.len() - 5) as u8;
+        Some(ret)
+    }
+
+    fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
+        // Note that only the last reply is nonempty for this one
+        if data.len() < 2 {
+            return Err(Error::UnexpectedEof);
+        }
+        let sw2 = data.pop().unwrap();
+        let sw1 = data.pop().unwrap();
+        self.reply = data;
+        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        Ok(())
+    }
+
+    fn into_reply(self) -> (u16, Vec<u8>) {
+        (self.sw, self.reply)
+    }
+}
+
+
+
 
 
 

@@ -55,7 +55,7 @@ impl Dongle for HardDongle {
 
     fn exchange<C: Command>(&mut self, mut cmd: C) -> Result<(u16, Vec<u8>), Error> {
         let handle = self.handle.as_mut().unwrap();
-        while let Some(msg) = cmd.encode_next() {
+        while let Some(msg) = cmd.encode_next(constants::apdu::ledger::MAX_APDU_SIZE) {
             write_apdu(handle, &msg)?;
             let reply = read_apdu(handle, Duration::from_secs(120))?;  // TODO make 2min configurable
             cmd.decode_reply(reply)?

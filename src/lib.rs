@@ -27,6 +27,7 @@
 #![deny(unused_mut)]
 #![deny(missing_docs)]
 
+extern crate bitcoin;
 extern crate byteorder;
 extern crate crypto;
 #[macro_use] extern crate log;

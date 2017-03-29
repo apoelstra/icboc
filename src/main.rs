@@ -21,10 +21,13 @@
 //! unsafe usage (e.g. address reuse), and more TBD.
 //!
 
+extern crate bitcoin;
 extern crate env_logger;
 extern crate hex;
 extern crate icebox;
 
+use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
 use std::{env, io, fs, process};
 use std::io::{Write, BufRead};
 use std::str::FromStr;
@@ -49,6 +52,7 @@ fn usage_and_die(name: &str) -> ! {
     println!("  {} <filename> init <account> <n_entries>", name);
     println!("  {} <filename> info [address index]", name);
     println!("  {} <filename> getaddress [address index]", name);
+    println!("  {} <filename> receive <hex tx>", name);
     // TODO: extend wallet
     process::exit(1);
 }
@@ -181,6 +185,22 @@ fn main() {
             } else {
                 println!("This address has already been used.");
             }
+        }
+        "receive" => {
+            if args.len() < 3 {
+                usage_and_die(&args[0]);
+            }
+
+            let filename = &args[1];
+            let mut wallet = pretty_unwrap("Loading wallet",
+                                           icebox::wallet::EncryptedWallet::load(filename));
+            let tx_bytes: Vec<u8> = hex::FromHex::from_hex(args[3].as_bytes()).expect("decoding tx hex");
+            let tx: Transaction = bitcoin_deserialize(&tx_bytes).expect("decoding transaction");
+
+            pretty_unwrap("Processing transaction",
+                          wallet.receive(&mut dongle, &tx));
+            pretty_unwrap("Saving wallet",
+                          wallet.save(filename));
         }
         _ => usage_and_die(&args[0])
     }

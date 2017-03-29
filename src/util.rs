@@ -14,6 +14,9 @@
 
 //! # Miscellaneous Functions
 
+use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::network::encodable::{ConsensusEncodable, VarInt};
+use bitcoin::network::serialize::RawEncoder;
 use crypto::digest::Digest;
 use crypto::sha2;
 use secp256k1::{Secp256k1, ContextFlag, Signature};
@@ -110,4 +113,84 @@ pub fn convert_compact_to_secp(sig: &[u8]) -> Result<Signature, Error> {
     sig.normalize_s(&secp);
     Ok(sig)
 }
+
+
+/// Transactions are sent to the device in a bit of a weird way. Each individual
+/// transaction component needs to be sent to the device intact (except possibly
+/// scripts), but any transaction will greatly exceed the APDU packet size (260
+/// bytes minus whatever header data is needed). So we need to carefully split
+/// the transaction being sure not to cut any primitives except for scripts.
+///
+/// What this function does is encodes a primitive, marking a cut-point before
+/// and after it (and within, if it is too long -- scripts are the only thing
+/// that will do this, so this is ok). We leave it to a higher layer to use an
+/// optimal set of cut-points.
+///
+/// Cut-points are encoded as indices into the data array, including 0 and the
+/// total length.
+fn encode_marking_cutpoints<'a, T>(data: &T, buf: &'a mut Vec<u8>, cuts: &mut Vec<usize>, max_size: usize)
+    where T: ConsensusEncodable<RawEncoder<&'a mut Vec<u8>>>
+{
+    // Encode
+    let mut encoder = RawEncoder::new(buf);
+    data.consensus_encode(&mut encoder).unwrap();
+    let buf = encoder.into_inner();
+
+    // Record any required cuts partway through the data
+    let mut last_cut = *cuts.last().unwrap();
+    while buf.len() > last_cut + max_size {
+        cuts.push(last_cut + max_size);
+        last_cut = *cuts.last().unwrap();
+    }
+    // Record cut at end of encoding (this could duplicate a cut from the
+    // above loop, but that's fine, 0-length cuts are harmless).
+    cuts.push(buf.len());
+}
+
+/// Wrapper around `encode_marking_cutpoint` that encodes a Transaction correctly
+pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (Vec<u8>, Vec<usize>) {
+    let mut ret_ser_tx = vec![]; 
+    let mut ret_cuts = vec![0];  // mark initial cut at 0
+
+    // Copied structure from rust-bitcoin transaction.rs, with TxIn and TxOut unrolled
+    encode_marking_cutpoints(&tx.version, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    // Encode segwit magic
+    if !tx.witness.is_empty() {
+        encode_marking_cutpoints(&0u8, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        encode_marking_cutpoints(&1u8, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    }
+    // Encode inputs
+    encode_marking_cutpoints(&VarInt(tx.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+    for input in &tx.input {
+        encode_marking_cutpoints(&input.prev_hash, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        ret_cuts.pop();  // Cut between txid and vout disallowed
+        encode_marking_cutpoints(&input.prev_index, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        ret_cuts.pop();  // Ditto between vout and script_sig length
+        encode_marking_cutpoints(&input.script_sig, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        encode_marking_cutpoints(&input.sequence, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    }
+    // Encode outputs
+    encode_marking_cutpoints(&VarInt(tx.output.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+    for output in &tx.output {
+        encode_marking_cutpoints(&output.value, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        ret_cuts.pop();  // Cut between value and script_pubkey disallowed
+        encode_marking_cutpoints(&output.script_pubkey, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    }
+    // Encode witnesses
+    if !tx.witness.is_empty() {
+        encode_marking_cutpoints(&VarInt(tx.witness.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+        for witness in &tx.witness {
+            // Encode the individual components of the witnesses
+            encode_marking_cutpoints(&VarInt(witness.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+            for component in witness {
+                encode_marking_cutpoints(component, &mut ret_ser_tx, &mut ret_cuts, max_size);
+            }
+        }
+    }
+    // Finish
+    encode_marking_cutpoints(&tx.lock_time, &mut ret_ser_tx, &mut ret_cuts, max_size);
+
+    (ret_ser_tx, ret_cuts)
+}
+
 
