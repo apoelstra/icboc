@@ -71,9 +71,9 @@ pub mod apdu {
 
 /// Wallet structure constants
 pub mod wallet {
-    /// Magic bytes indicating a wallet file (bottom three are a version)
-    /// First five bytes are guaranteed random: used `wget boards.4chan.org/b/ -O - | sha256sum` to compute
-    pub const MAGIC: u64 = 0x96e88001;
+    /// Magic bytes indicating a wallet file (bottom two are a version)
+    /// First six bytes are guaranteed random: used `wget boards.4chan.org/b/ -O - | sha256sum` to compute
+    pub const MAGIC: u64 = 0x3160_f90d_aae5_0001;
     /// Size, in bytes, of the data block for each entry.
     pub const DECRYPTED_ENTRY_SIZE: usize = 320;
     /// Size, in bytes, of the AES-CTR-encrypted data block.
