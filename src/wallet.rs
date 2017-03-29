@@ -103,6 +103,21 @@ impl EncryptedWallet {
         Ok(ret)
     }
 
+    /// Extends the number of entries in the wallet
+    pub fn extend<D: Dongle>(&mut self, dongle: &mut D, n_entries: usize) -> Result<(), Error> {
+        if n_entries <= self.entries.len() {
+            return Ok(());
+        }
+        for i in self.entries.len()..n_entries {
+            info!("Encrypting zeroes for key {}", i);
+            let mut block = [0; ENCRYPTED_ENTRY_SIZE];
+            let zeroes = [0; DECRYPTED_ENTRY_SIZE];
+            encrypt(dongle, self.account, i, &zeroes, &mut block)?;
+            self.entries.push(block);
+        }
+        Ok(())
+    }
+
     /// Saves out the wallet to a file
     pub fn save(&self, filename: &str) -> Result<(), Error> {
         let mut temp_name = filename.to_owned();

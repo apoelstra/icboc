@@ -50,6 +50,7 @@ fn user_prompt(prompt: &str) -> String {
 fn usage_and_die(name: &str) -> ! {
     println!("Usage: {} <wallet filename> <command>", name);
     println!("  {} <filename> init <account> <n_entries>", name);
+    println!("  {} <filename> extend <new n_entries>", name);
     println!("  {} <filename> info [address index]", name);
     println!("  {} <filename> getaddress [address index]", name);
     println!("  {} <filename> receive <hex tx>", name);
@@ -135,6 +136,27 @@ fn main() {
             pretty_unwrap("Saving wallet",
                           wallet.save(filename));
         }
+        // Extend wallet capacity
+        "extend" => {
+            if args.len() < 4 {
+                usage_and_die(&args[0]);
+            }
+
+            let filename = &args[1];
+            let n_entries = usize::from_str(&args[3]).expect("Parsing n_entries as number");
+
+            let mut wallet = pretty_unwrap("Loading wallet",
+                                           icebox::wallet::EncryptedWallet::load(filename));
+            if wallet.n_entries() >= n_entries {
+                println!("Wallet already has {} entries, not decreasing.", wallet.n_entries());
+            } else {
+                pretty_unwrap("Extending wallet",
+                              wallet.extend(&mut dongle, n_entries));
+            }
+            pretty_unwrap("Saving wallet",
+                          wallet.save(filename));
+        }
+        // Get information about the wallet or a specific entry
         "info" => {
             if args.len() < 3 {
                 usage_and_die(&args[0]);
@@ -151,6 +173,7 @@ fn main() {
                 println!("{}", entry);
             }
         }
+        // Update a new unused address slot
         "getaddress" => {
             if args.len() < 3 {
                 usage_and_die(&args[0]);
@@ -189,6 +212,7 @@ fn main() {
                 println!("This address has already been used.");
             }
         }
+        // Process a transaction that sends us coins
         "receive" => {
             if args.len() < 3 {
                 usage_and_die(&args[0]);
@@ -205,6 +229,7 @@ fn main() {
             pretty_unwrap("Saving wallet",
                           wallet.save(filename));
         }
+        // Don't recognize command
         _ => usage_and_die(&args[0])
     }
 }
