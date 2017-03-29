@@ -61,19 +61,19 @@ pub fn bip32_path(account: u32, purpose: KeyPurpose, index: u32) -> [u32; 5] {
 /// Helper function to encrypt an entry
 fn encrypt<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8], output: &mut [u8]) -> Result<(), Error> {
     let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::AesKey, index as u32))?;
-    let iv = dongle.get_random(32)?;
+    let iv = dongle.get_random(16)?;
     let mut encryptor = aes::ctr(aes::KeySize::KeySize256, &key.chaincode[..], &iv);
-    output[0..32].copy_from_slice(&iv);
-    encryptor.process(input, &mut output[32..]);
+    output[0..16].copy_from_slice(&iv);
+    encryptor.process(input, &mut output[16..]);
     Ok(())
 }
 
 /// Helper function to decrypt an entry
 fn decrypt<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8], output: &mut [u8]) -> Result<(), Error> {
     let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::AesKey, index as u32))?;
-    let iv = &input[0..32];
+    let iv = &input[0..16];
     let mut encryptor = aes::ctr(aes::KeySize::KeySize256, &key.chaincode[..], iv);
-    encryptor.process(&input[32..], output);
+    encryptor.process(&input[16..], output);
     Ok(())
 }
 

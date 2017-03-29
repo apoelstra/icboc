@@ -77,7 +77,7 @@ pub mod wallet {
     /// Size, in bytes, of the data block for each entry.
     pub const DECRYPTED_ENTRY_SIZE: usize = 320;
     /// Size, in bytes, of the AES-CTR-encrypted data block.
-    pub const ENCRYPTED_ENTRY_SIZE: usize = 352;
+    pub const ENCRYPTED_ENTRY_SIZE: usize = 336;
     /// Maximum length in bytes of the user ID field
     pub const MAX_USER_ID_BYTES: usize = 32;
     /// Maximum length in bytes of the freeform note field
