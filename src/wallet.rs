@@ -215,6 +215,7 @@ impl EncryptedWallet {
         let key = dongle.get_public_key(&bip32_path(self.account, KeyPurpose::Address, index as u32))?;
         let entry = Entry {
             state: EntryState::Valid,
+            spent: false,
             trusted_input: [0; 56],
             address: key.b58_address,
             index: index,
@@ -326,15 +327,18 @@ pub enum EntryState {
 /// | Date       | ASCII bytes YYYY-MM-DD HH:MM:SS+ZZZZ    |  24 bytes | 164    |
 /// | Blockhash  | Recent blockhash, big endian            |  32 bytes | 188    |
 /// | User ID    | Freeform, zero-padded, expected ASCII   |  32 bytes | 220    |
-/// | Note       | Freeform, zero-padded, expected ASCII   |  68 bytes | 252    |
+/// | Note       | Freeform, zero-padded, expected ASCII   |  80 bytes | 252    |
+/// | Flags      | 0 for unspent, 1 for spent              |   4 bytes | 332    |
 /// +------------+-----------------------------------------+-----------+--------+
 ///
-/// Total: 320 bytes
-/// Total signed: 256 bytes
+/// Total: 336 bytes
+/// Total signed: 276 bytes
 ///
 pub struct Entry {
     /// The overall state of this entry
     pub state: EntryState,
+    /// Whether or not this output is marked as having been spent
+    spent: bool,
     /// The "trusted input", a txid:vout:amount triple encrypted for the dongle by itself
     trusted_input: [u8; 56],
     /// The base58-encoded address of this entry
@@ -370,9 +374,10 @@ impl Entry {
         input[188..220].copy_from_slice(&self.blockhash);
         input[220..220 + self.user.as_bytes().len()].copy_from_slice(self.user.as_bytes());
         input[252..252 + self.note.as_bytes().len()].copy_from_slice(self.note.as_bytes());
+        BigEndian::write_u32(&mut input[332..336], if self.spent { 1 } else { 0 });
         // Now sign it
         let sig = {
-            let to_sign = &input[64..320];
+            let to_sign = &input[64..336];
 
             println!("The dongle will ask you to sign hash {}", hash_sha256(to_sign).to_hex());
             println!("This is the SHA256 of data {}", to_sign.to_hex());
@@ -394,6 +399,7 @@ impl Entry {
         if data.iter().all(|x| *x == 0) {
             Ok(Entry {
                 state: EntryState::Unused,
+                spent: false,
                 trusted_input: [0; 56],
                 address: String::new(),
                 index: 0,
@@ -410,10 +416,10 @@ impl Entry {
 
             let secp = Secp256k1::with_caps(ContextFlag::VerifyOnly);
             let sig = convert_compact_to_secp(&data[0..64])?;
-            let mut msg_full = vec![0; 284];
+            let mut msg_full = vec![0; 300];
             // nb the x18 here is the length of "Bitcoin Signed Message:\n", the xfdx00x01 is the length of the rest
-            msg_full[0..28].copy_from_slice(b"\x18Bitcoin Signed Message:\n\xfd\x00\x01");
-            msg_full[28..284].copy_from_slice(&data[64..320]);
+            msg_full[0..28].copy_from_slice(b"\x18Bitcoin Signed Message:\n\xfd\x10\x01");
+            msg_full[28..300].copy_from_slice(&data[64..336]);
             let msg_hash = hash_sha256(&hash_sha256(&msg_full));
             let msg = secp256k1::Message::from_slice(&msg_hash).unwrap();
             let verified = secp.verify(&msg, &sig, &key.public_key).is_ok();
@@ -424,6 +430,7 @@ impl Entry {
 
             Ok(Entry {
                 state: if verified { EntryState::Valid } else { EntryState::Invalid },
+                spent: BigEndian::read_u32(&data[332..336]) == 1,
                 trusted_input: [0; 56],
                 address: key.b58_address,
                 index: index,
@@ -433,7 +440,7 @@ impl Entry {
                 date: date,
                 user: String::from_utf8(data[220..252].to_owned())?,
                 blockhash: hash,
-                note: String::from_utf8(data[252..320].to_owned())?
+                note: String::from_utf8(data[252..332].to_owned())?
             })
         }
     }
@@ -458,6 +465,7 @@ impl fmt::Display for Entry {
             writeln!(f, "    txid: {}", self.txid.to_hex())?;
             writeln!(f, "    vout: {}", self.vout)?;
             writeln!(f, "  amount: {}", self.amount)?;
+            writeln!(f, "   spent: {}", self.spent)?;
         }
         writeln!(f, " created: {}", str::from_utf8(&self.date[..]).unwrap())?;
         writeln!(f, " (after): {}", self.blockhash.to_hex())?;

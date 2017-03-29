@@ -72,6 +72,7 @@ updated to reflect the unspent output information, as
      address: 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
         txid: 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5
         vout: 1
+       spent: false
       amount: 125000000
      created: 2017-03-29 16:28:10-0000
      (after): 0000000000000000024068e6d589797e2b1d9a52498c65b5ef5600caedb37aee
