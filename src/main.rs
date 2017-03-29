@@ -22,9 +22,9 @@
 //!
 
 extern crate bitcoin;
-extern crate env_logger;
 extern crate hex;
 extern crate icebox;
+extern crate simplelog;
 
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
@@ -105,7 +105,7 @@ fn pretty_unwrap<T>(msg: &str, res: Result<T, Error>) -> T {
 
 fn main() {
     // Startup
-    env_logger::init().unwrap();
+    simplelog::SimpleLogger::init(simplelog::LogLevelFilter::Info, simplelog::Config::default()).unwrap();
 
     let args: Vec<String> = env::args().collect();
     match args.len() {

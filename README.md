@@ -62,7 +62,7 @@ SegWit provides is to fix this inconvenience.)
 The wallet will read the transaction, detect which outputs belong to it,
 and update the appropriate entries:
 
-    Receive to entry 0. Amount 125000000, outpoint 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5:1!
+    17:04:24 [INFO] Receive to entry 0. Amount 125000000, outpoint 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5:1!
 
 It will ask you to re-sign for any entries that changed. The entries are
 updated to reflect the unspent output information, as
