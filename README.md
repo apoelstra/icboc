@@ -46,6 +46,11 @@ You can retrieve this at any time by using its index:
 
     icebox wallet.icebox.dat info 0
 
+or by its address (though this will require retrieving addresses from the
+dongle until it's found, there is no index for privacy reasons):
+
+    icebox wallet.icebox.dat info 1CptY69DsTdbjLYfanMtwNWZNbDDmSJFjn
+
 ## Version 1
 
 The first version of Icebox is designed to work with the Bitcoin app that comes
@@ -57,7 +62,7 @@ to do. Its features are
  - [x] Sign said information with the address and store this in an encrypted form
  - [x] Display information, including verifying the signature, about generated addresses
  - [x] Error out when the user attempts to generate the same address twice
- - [ ] Search wallet by address rather than BIP32 index
+ - [x] Search wallet by address rather than BIP32 index
  - [x] Update wallet when payment is received to note txid/vout/amount
  - [x] Allow extending the wallet to add more address entries
  - [ ] Sign transactions

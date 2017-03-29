@@ -57,6 +57,8 @@ pub enum Error {
     NoteTooLong(usize, usize),
     /// Tried to access entry not in the wallet
     EntryOutOfRange(usize),
+    /// Searched for an address not in the wallet
+    AddressNotFound,
     /// Received an unparseable signature
     BadSignature,
     /// The dongle requested we do something unsupported
@@ -127,6 +129,7 @@ impl error::Error for Error {
             Error::UserIdTooLong(_, _) => "user ID too long",
             Error::NoteTooLong(_, _) => "note too long",
             Error::EntryOutOfRange(_) => "tried to access entry outside of wallet",
+            Error::AddressNotFound => "address not found in wallet",
             Error::BadSignature => "unparseable signature",
             Error::Unsupported => "we were asked to do something unsupported",
             Error::UnexpectedEof => "unexpected end of data"

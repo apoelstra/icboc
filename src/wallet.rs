@@ -185,6 +185,17 @@ impl EncryptedWallet {
         Entry::decrypt_and_verify(dongle, self.account, index, &self.entries[index])
     }
 
+    /// Does a linear scan for a base58-encoded address
+    pub fn search<D: Dongle>(&self, dongle: &mut D, address: &str) -> Result<Entry, Error> {
+        for (i, entry) in self.entries.iter().enumerate() {
+            let key = dongle.get_public_key(&bip32_path(self.account, KeyPurpose::Address, i as u32))?;
+            if key.b58_address == address {
+                return Entry::decrypt_and_verify(dongle, self.account, i, entry);
+            }
+        }
+        Err(Error::AddressNotFound)
+    }
+
     /// Update an address entry to indicate that it is in use
     pub fn update<D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Vec<u8>, note: String) -> Result<Entry, Error> {
         if user.as_bytes().len() > MAX_USER_ID_BYTES {

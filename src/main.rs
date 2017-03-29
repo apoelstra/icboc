@@ -51,10 +51,14 @@ fn usage_and_die(name: &str) -> ! {
     println!("Usage: {} <wallet filename> <command>", name);
     println!("  {} <filename> init <account> <n_entries>", name);
     println!("  {} <filename> extend <new n_entries>", name);
-    println!("  {} <filename> info [address index]", name);
+    println!("  {} <filename> info [address|index]", name);
     println!("  {} <filename> getaddress [address index]", name);
     println!("  {} <filename> receive <hex tx>", name);
     println!("  {} <filename> rerandomize", name);
+    println!("");
+    println!("Note that several commands do a linear scan of the entire wallet,");
+    println!("since dongle cooperation is required to decrypt each individual");
+    println!("entry. These commands will be very slow.");
     // TODO: extend wallet
     process::exit(1);
 }
@@ -168,10 +172,18 @@ fn main() {
                                        icebox::wallet::EncryptedWallet::load(filename));
             println!("Wallet: {} entries, account {}.", wallet.n_entries(), wallet.account());
             if args.len() > 3 {
-                let index = usize::from_str(&args[3]).expect("Parsing index as number");
-                let entry = pretty_unwrap("Decrypting entry",
-                                          wallet.lookup(&mut dongle, index));
-                println!("{}", entry);
+                // An index > length 10 is an address, we scan for it
+                if args[3].len() > 10 {
+                    let entry = pretty_unwrap("Searching for entry",
+                                              wallet.search(&mut dongle, &args[3]));
+                    println!("{}", entry);
+                } else {
+                // Otherwise take the index as an index
+                    let index = usize::from_str(&args[3]).expect("Parsing index as number");
+                    let entry = pretty_unwrap("Decrypting entry",
+                                              wallet.lookup(&mut dongle, index));
+                    println!("{}", entry);
+                }
             }
         }
         // Update a new unused address slot
