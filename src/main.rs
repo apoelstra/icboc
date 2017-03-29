@@ -51,10 +51,12 @@ fn usage_and_die(name: &str) -> ! {
     println!("Usage: {} <wallet filename> <command>", name);
     println!("  {} <filename> init <account> <n_entries>", name);
     println!("  {} <filename> extend <new n_entries>", name);
-    println!("  {} <filename> info [address|index]", name);
-    println!("  {} <filename> getaddress [address index]", name);
-    println!("  {} <filename> receive <hex tx>", name);
     println!("  {} <filename> rerandomize", name);
+    println!("");
+    println!("  {} <filename> getaddress [address index]", name);
+    println!("  {} <filename> getbalance", name);
+    println!("  {} <filename> info [address|index]", name);
+    println!("  {} <filename> receive <hex tx>", name);
     println!("");
     println!("Note that several commands do a linear scan of the entire wallet,");
     println!("since dongle cooperation is required to decrypt each individual");
@@ -228,6 +230,15 @@ fn main() {
             } else {
                 println!("This address has already been used.");
             }
+        }
+        // Sum all unspent entries to determine current wallet balance
+        "getbalance" => {
+            let filename = &args[1];
+            let wallet = pretty_unwrap("Loading wallet",
+                                       icebox::wallet::EncryptedWallet::load(filename));
+            let balance = pretty_unwrap("Checking balance",
+                                        wallet.get_balance(&mut dongle));
+            println!("Balance: {}", balance);
         }
         // Process a transaction that sends us coins
         "receive" => {

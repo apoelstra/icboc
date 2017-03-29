@@ -233,6 +233,18 @@ impl EncryptedWallet {
         Ok(entry)
     }
 
+    /// Does a linear scan to compute the total wallet balance
+    pub fn get_balance<D: Dongle>(&self, dongle: &mut D) -> Result<u64, Error> {
+        let mut balance = 0;
+        for i in 0..self.entries.len() {
+            let entry = self.lookup(dongle, i)?;
+            if !entry.spent {
+                balance += entry.amount;
+            }
+        }
+        Ok(balance)
+    }
+
     /// Process a transaction which claims to send coins to this wallet,
     /// finding all output which send coins to us
     pub fn receive<D: Dongle>(&mut self, dongle: &mut D, tx: &Transaction) -> Result<(), Error> {
