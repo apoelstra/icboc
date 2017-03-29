@@ -58,7 +58,7 @@ to do. Its features are
  - [x] Display information, including verifying the signature, about generated addresses
  - [x] Error out when the user attempts to generate the same address twice
  - [ ] Search wallet by address rather than BIP32 index
- - [ ] Update wallet when payment is received to note txid/vout/amount
+ - [x] Update wallet when payment is received to note txid/vout/amount
  - [ ] Allow extending the wallet to add more address entries
  - [ ] Sign transactions
 
