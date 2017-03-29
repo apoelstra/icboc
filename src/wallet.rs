@@ -272,6 +272,18 @@ impl EncryptedWallet {
         Ok(())
     }
 
+    /// Re-encrypts the entire wallet so that everything will appear updated,
+    /// to resist attacks where an attacker determines "used" wallets by
+    /// obtaining an empty copy and seeing which entries have changed
+    pub fn rerandomize<D: Dongle>(&mut self, dongle: &mut D) -> Result<(), Error> {
+        for i in 0..self.entries.len() {
+            let mut tmp = [0; DECRYPTED_ENTRY_SIZE];
+            decrypt(dongle, self.account, i, &self.entries[i], &mut tmp)?;
+            encrypt(dongle, self.account, i, &tmp, &mut self.entries[i])?;
+        }
+        Ok(())
+    }
+
     /// Accessor for the account number
     pub fn account(&self) -> u32 { self.account }
     /// Accessor for the number of entries

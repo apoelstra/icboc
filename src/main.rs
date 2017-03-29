@@ -54,6 +54,7 @@ fn usage_and_die(name: &str) -> ! {
     println!("  {} <filename> info [address index]", name);
     println!("  {} <filename> getaddress [address index]", name);
     println!("  {} <filename> receive <hex tx>", name);
+    println!("  {} <filename> rerandomize", name);
     // TODO: extend wallet
     process::exit(1);
 }
@@ -206,6 +207,10 @@ fn main() {
                 let entry = pretty_unwrap("Updating entry",
                                           wallet.update(&mut dongle, index, name, block, note));
                 println!("{}", entry);
+                println!("Rerandomizing wallet...");
+                pretty_unwrap("Rerandomizing wallet",
+                              wallet.rerandomize(&mut dongle));
+                println!("Done. Saving.");
                 pretty_unwrap("Saving wallet",
                               wallet.save(filename));
             } else {
@@ -224,8 +229,23 @@ fn main() {
             let tx_bytes: Vec<u8> = hex::FromHex::from_hex(args[3].as_bytes()).expect("decoding tx hex");
             let tx: Transaction = bitcoin_deserialize(&tx_bytes).expect("decoding transaction");
 
+            println!("Processing transaction...");
             pretty_unwrap("Processing transaction",
                           wallet.receive(&mut dongle, &tx));
+            println!("Rerandomizing wallet...");
+            pretty_unwrap("Rerandomizing wallet",
+                          wallet.rerandomize(&mut dongle));
+            println!("Done. Saving.");
+            pretty_unwrap("Saving wallet",
+                          wallet.save(filename));
+        }
+        // Re-encrypt the whole wallet to hide what has changed
+        "rerandomize" => {
+            let filename = &args[1];
+            let mut wallet = pretty_unwrap("Loading wallet",
+                                           icebox::wallet::EncryptedWallet::load(filename));
+            pretty_unwrap("Rerandomizing wallet",
+                          wallet.rerandomize(&mut dongle));
             pretty_unwrap("Saving wallet",
                           wallet.save(filename));
         }
