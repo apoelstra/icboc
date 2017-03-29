@@ -213,29 +213,46 @@ impl EncryptedWallet {
 
         for i in 0..self.entries.len() {
             let mut entry = self.lookup(dongle, i)?;
-            match entry.state {
-                EntryState::Unused => {},
-                EntryState::Invalid => {
-                    warn!("Entry {} has a bad signature, ignoring any spends to it.", i);
-                }
-                EntryState::Valid => {
-                    // TODO check that entry is not already used
-                    let address: Address = FromBase58::from_base58check(&entry.address)?;
-                    let spk = address.script_pubkey();
-                    for (vout, out) in tx.output.iter().enumerate() {
-                        if out.script_pubkey == spk {
-                            println!("Receive to entry {}. Amount {}, outpoint {}:{}!", i, out.value, txid, vout);
-                            let trusted_input = dongle.get_trusted_input(tx, vout as u32)?;
-                            entry.trusted_input.copy_from_slice(&trusted_input[..]);
-                            entry.txid.copy_from_slice(&txid[..]);
-                            entry.txid.reverse();  // lol bitcoin
-                            entry.vout = vout as u32;
-                            entry.amount = out.value;
-                            self.entries[i] = entry.sign_and_encrypt(dongle, self.account, i)?;
+            // Catch Unused early because otherwise we'll error out trying
+            // to parse a bunch of zeroes as meaningful data
+            if entry.state == EntryState::Unused {
+                info!("Skipping unused entry {} (use `getaddress {}` to mark it used).", i, i);
+                continue;
+            }
+            let address: Address = FromBase58::from_base58check(&entry.address)?;
+            let spk = address.script_pubkey();
+            for (vout, out) in tx.output.iter().enumerate() {
+                if out.script_pubkey == spk {
+                    info!("Receive to entry {}. Amount {}, outpoint {}:{}!", i, out.value, txid, vout);
+                    // Before updating anything check the state of the entry to see if this is allowed.
+                    match entry.state {
+                        EntryState::Unused => unreachable!(),
+                        EntryState::Invalid => {
+                            error!("Entry has a bad signature. Refusing to recognize this receive.");
+                            error!("(You can work around this by creating another wallet with account {},", self.account);
+                            error!("doing `getaddress {}` on it, and sweeping the coins to this one.)", i);
+                            continue;
                         }
-                    } // end txo loop
+                        EntryState::Valid => {
+                            // TODO check that entry is not already used
+                        }
+                    }
+                    if entry.txid.iter().any(|x| *x != 0) {
+                        error!("Entry already has a receive. Refusing to recognize this receive.");
+                        error!("(You can work around this by creating another wallet with account {},", self.account);
+                        error!("doing `getaddress {}` on it, and sweeping the coins to this one.)", i);
+                        continue;
+                    }
+                    // Ok, update
+                    let trusted_input = dongle.get_trusted_input(tx, vout as u32)?;
+                    entry.trusted_input.copy_from_slice(&trusted_input[..]);
+                    entry.txid.copy_from_slice(&txid[..]);
+                    entry.txid.reverse();  // lol bitcoin
+                    entry.vout = vout as u32;
+                    entry.amount = out.value;
+                    self.entries[i] = entry.sign_and_encrypt(dongle, self.account, i)?;
                 }
-            } // end match
+            } // end txo loop
         } // end entries loop
         Ok(())
     }

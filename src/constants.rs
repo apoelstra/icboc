@@ -59,6 +59,7 @@ pub mod apdu {
             pub const BAD_P1_OR_P2: u16 = 0x6B00;
             pub const INS_NOT_SUPPORTED: u16 = 0x6D00;
             pub const DONGLE_LOCKED: u16 = 0x6982;
+            pub const SIGN_REFUSED: u16 = 0x6985;
             pub mod exception {
                 pub const EXCEPTION: u16 = 0x6F01;
                 pub const INVALID_PARAMETER: u16 = 0x6F02;

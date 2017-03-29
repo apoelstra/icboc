@@ -84,6 +84,9 @@ fn pretty_unwrap<T>(msg: &str, res: Result<T, Error>) -> T {
                 Error::ApduBadStatus(sw::DONGLE_LOCKED) => {
                     println!("Please unlock the dongle.");
                 }
+                Error::ApduBadStatus(sw::SIGN_REFUSED) => {
+                    println!("User refused the signature on the dongle.");
+                }
                 // Otherwise just print the error
                 e => println!("{}", e)
             }
