@@ -35,12 +35,12 @@ entry:
 
     Signed Entry:
        index: 0
-     address: 1CptY69DsTdbjLYfanMtwNWZNbDDmSJFjn
+     address: 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
         txid: no associated output
-     created: 2017-03-28 14:37:34-0000
-     (after): 0000000000000000005f6cd977d679024084ec3400f3dbeadab19ca4f9e107ef
+     created: 2017-03-29 16:28:10-0000
+     (after): 0000000000000000024068e6d589797e2b1d9a52498c65b5ef5600caedb37aee
         user: apoelstra@home
-        note: Hiya, this is my note
+        note: payment for whats-its-contract
 
 You can retrieve this at any time by using its index:
 
@@ -49,7 +49,36 @@ You can retrieve this at any time by using its index:
 or by its address (though this will require retrieving addresses from the
 dongle until it's found, there is no index for privacy reasons):
 
-    icebox wallet.icebox.dat info 1CptY69DsTdbjLYfanMtwNWZNbDDmSJFjn
+    icebox wallet.icebox.dat info 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
+
+Later, if you receive coins to this address, you can inform the wallet by
+giving it the entire hex-encoded rawtransaction. The entire transaction is
+required by the Ledger because this is the only way it can confirm the
+input values it's signing off on, when signing coins. (One of the many
+SegWit provides is to fix this inconvenience.)
+
+    icebox wallet.icebox.dat receive 02000000011aef8cfaec49ab111d6240c6ce609d430c7ec990307dfca6f6addb7c82152e710000000000feffffff02935b9800000000001976a9141285a7fe04cd6df5e5b93b56bc0ef171332e85f588ac40597307000000001976a9140295ec35d638c16b25608b4e362a214a5692d20088ac00000000
+
+The wallet will read the transaction, detect which outputs belong to it,
+and update the appropriate entries:
+
+    Receive to entry 0. Amount 125000000, outpoint 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5:1!
+
+It will ask you to re-sign for any entries that changed. The entries are
+updated to reflect the unspent output information, as
+
+    Signed Entry:
+       index: 0
+     address: 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
+        txid: 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5
+        vout: 1
+      amount: 125000000
+     created: 2017-03-29 16:28:10-0000
+     (after): 0000000000000000024068e6d589797e2b1d9a52498c65b5ef5600caedb37aee
+        user: apoelstra@home
+        note: payment for whats-its-contract
+                                            
+
 
 ## Version 1
 
