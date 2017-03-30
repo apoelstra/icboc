@@ -17,11 +17,12 @@
 //! Abstract API for communicating with the device
 //!
 
-use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::blockdata::transaction::{Transaction, SigHashType};
 
 use constants;
 use error::Error;
 use self::message::{Command, Response};
+use spend::Spend;
 use util::convert_ledger_der_to_compact;
 
 pub mod ledger;
@@ -97,6 +98,39 @@ pub trait Dongle {
         if rev.len() != 56 {
             return Err(Error::ResponseWrongLength(constants::apdu::ledger::ins::GET_TRUSTED_INPUT, rev.len()));
         }
+        if sw == constants::apdu::ledger::sw::OK {
+            Ok(rev)
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
+    /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
+    fn transaction_input_start(&mut self, spend: &Spend, index: usize, continuing: bool) -> Result<(), Error> {
+        let command = message::UntrustedHashTransactionInputStart::new(spend, index, continuing, constants::apdu::ledger::MAX_APDU_SIZE);
+        let (sw, _) = try!(self.exchange(command));
+        if sw == constants::apdu::ledger::sw::OK {
+            Ok(())
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
+    /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL` command
+    fn transaction_input_finalize(&mut self, spend: &Spend) -> Result<(), Error> {
+        let command = message::UntrustedHashTransactionInputFinalize::new(spend, constants::apdu::ledger::MAX_APDU_SIZE);
+        let (sw, _) = try!(self.exchange(command));
+        if sw == constants::apdu::ledger::sw::OK {
+            Ok(())
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
+    /// Sends the device a `UNTRUSTED HASH SIGN` command
+    fn transaction_sign(&mut self, bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> Result<Vec<u8>, Error> {
+        let command = message::UntrustedHashSign::new(bip32_path, sighash, locktime);
+        let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             Ok(rev)
         } else {

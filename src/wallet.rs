@@ -17,10 +17,11 @@
 //! Support for the "wallet" which is really more of an audit log
 //!
 
-use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::blockdata::transaction::{Transaction, TxOut, SigHashType};
+use bitcoin::blockdata::script::{self, Script};
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::util::address::Address;
-use bitcoin::util::base58::FromBase58;
+use bitcoin::util::base58::{FromBase58, ToBase58};
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt, BigEndian};
 use crypto::aes;
 use hex::ToHex;
@@ -29,10 +30,11 @@ use std::{fmt, io, fs, str};
 use std::io::{Read, Write};
 use time;
 
-use constants::wallet::{DECRYPTED_ENTRY_SIZE, ENCRYPTED_ENTRY_SIZE, MAGIC, MAX_USER_ID_BYTES, MAX_NOTE_BYTES};
+use constants::wallet::{DECRYPTED_ENTRY_SIZE, ENCRYPTED_ENTRY_SIZE, MAGIC, MAX_USER_ID_BYTES, MAX_NOTE_BYTES, CHANGE_DUST};
 use dongle::Dongle;
 use error::Error;
 use util::{hash_sha256, convert_compact_to_secp};
+use spend;
 
 /// List of purposes that we use BIP32 keys
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -166,11 +168,10 @@ impl EncryptedWallet {
 
     /// Scan the wallet for the first unused index
     pub fn next_unused_index<D: Dongle>(&self, dongle: &mut D) -> Result<usize, Error> {
-        let mut output = [0u8; DECRYPTED_ENTRY_SIZE];
-        for (index, entry) in self.entries.iter().enumerate() {
-            decrypt(dongle, self.account, index, entry, &mut output)?;
-            if output.iter().all(|x| *x == 0) {
-                return Ok(index)
+        for i in 0..self.entries.len() {
+            let entry = self.lookup(dongle, i)?;
+            if entry.state != EntryState::Unused {
+                return Ok(entry.index)
             }
         }
         Err(Error::WalletFull)
@@ -202,7 +203,7 @@ impl EncryptedWallet {
             return Err(Error::UserIdTooLong(user.as_bytes().len(), MAX_USER_ID_BYTES));
         }
         if note.as_bytes().len() > MAX_NOTE_BYTES {
-            return Err(Error::UserIdTooLong(note.as_bytes().len(), MAX_NOTE_BYTES));
+            return Err(Error::NoteTooLong(note.as_bytes().len(), MAX_NOTE_BYTES));
         }
 
         let timestr = time::strftime("%F %T%z", &time::now()).unwrap();
@@ -217,7 +218,7 @@ impl EncryptedWallet {
             state: EntryState::Valid,
             spent: false,
             trusted_input: [0; 56],
-            address: key.b58_address,
+            address: FromBase58::from_base58check(&key.b58_address)?,
             index: index,
             txid: [0; 32],
             vout: 0,
@@ -258,8 +259,7 @@ impl EncryptedWallet {
                 info!("Skipping unused entry {} (use `getaddress {}` to mark it used).", i, i);
                 continue;
             }
-            let address: Address = FromBase58::from_base58check(&entry.address)?;
-            let spk = address.script_pubkey();
+            let spk = entry.address.script_pubkey();
             for (vout, out) in tx.output.iter().enumerate() {
                 if out.script_pubkey == spk {
                     info!("Receive to entry {}. Amount {}, outpoint {}:{}!", i, out.value, txid, vout);
@@ -296,6 +296,14 @@ impl EncryptedWallet {
         Ok(())
     }
 
+    /// Mark an address as having been spent
+    pub fn mark_spent<D: Dongle>(&mut self, dongle: &mut D, index: usize) -> Result<(), Error> {
+        let mut entry = self.lookup(dongle, index)?;
+        entry.spent = true;
+        self.entries[index] = entry.sign_and_encrypt(dongle, self.account, index)?;
+        Ok(())
+    }
+
     /// Re-encrypts the entire wallet so that everything will appear updated,
     /// to resist attacks where an attacker determines "used" wallets by
     /// obtaining an empty copy and seeing which entries have changed
@@ -306,6 +314,89 @@ impl EncryptedWallet {
             encrypt(dongle, self.account, i, &tmp, &mut self.entries[i])?;
         }
         Ok(())
+    }
+
+    /// Scan the wallet finding funds in excess of `total_amount` as well
+    /// as the next available unused address for change
+    pub fn get_inputs_and_change<D: Dongle>(&self, dongle: &mut D, fee_rate: u64, spend: &mut spend::Spend) -> Result<(), Error> {
+        let mut found_amount = 0;
+        let mut found_change = false;
+
+        // (Over)estimate tx size for fee accounting purposes
+        let mut size_bytes = (13 + ((spend.output.len() + 1) * 34)) as u64;
+        let mut total_amount = 0;
+        for output in &spend.output {
+            total_amount += output.value;
+        }
+
+        for i in 0..self.entries.len() {
+            let entry = self.lookup(dongle, i)?;
+            // Check for change
+            match entry.state {
+                EntryState::Unused => {
+                    if !found_change {
+                        println!("translating change from {:?}", entry.address);
+                        spend.output.push(TxOut {
+                            script_pubkey: entry.address.script_pubkey(),
+                            value: 0
+                        });
+                        spend.change_path = bip32_path(self.account, KeyPurpose::Address, i as u32);
+                        found_change = true;
+                    }
+                }
+                EntryState::Invalid => {
+                    warn!("Skipping output {} which has a bad signature.", i);
+                }
+                EntryState::Valid => {
+                    if found_amount < total_amount + (size_bytes * fee_rate / 1000) {
+                        spend.input.push(spend::Input::from_entry(&entry));
+                        size_bytes += 150; // 40 txin stuff, 72 sig, 33 key
+                        found_amount += entry.amount;
+                    }
+                }
+            }
+            // Early quit if we have change and sufficient funds
+            if found_change && found_amount >= total_amount + (size_bytes * fee_rate / 1000) {
+                break;
+            }
+        }
+
+        // Assess what we found and return errors if necessary
+        let total_needed = total_amount + (size_bytes * fee_rate / 1000);
+        if found_amount < total_needed {
+            return Err(Error::InsufficientFunds(found_amount, total_needed));
+        }
+        let computed_change = found_amount - total_needed;
+        if computed_change < CHANGE_DUST {
+            spend.change_amount = 0;
+            spend.change_path = [0; 5];
+            if found_change {
+                spend.output.pop();
+            }
+        } else {
+            spend.change_amount = computed_change;
+            spend.output.last_mut().unwrap().value = computed_change;
+            if !found_change {
+                return Err(Error::WalletFull);
+            }
+        }
+
+        // If no errors, we're done!
+        Ok(())
+    }
+
+    /// Obtain a scriptsig from the dongle for a specific input in a spending transaction
+    pub fn get_script_sig<D: Dongle>(&self, dongle: &mut D, spend: &spend::Spend, index: usize, continuing: bool) -> Result<Script, Error> {
+        let secp = Secp256k1::with_caps(ContextFlag::None);
+        dongle.transaction_input_start(spend, index, continuing)?;
+        dongle.transaction_input_finalize(spend)?;
+        let signing_pk_path = bip32_path(self.account, KeyPurpose::Address, index as u32);
+        let signing_pk = dongle.get_public_key(&signing_pk_path)?;
+        let mut vec_sig = dongle.transaction_sign(signing_pk_path, SigHashType::All, 0)?;
+        vec_sig[0] = 0x30;
+        Ok(script::Builder::new().push_slice(&vec_sig[..])
+                                 .push_slice(&signing_pk.public_key.serialize_vec(&secp, true))
+                                 .into_script())
     }
 
     /// Accessor for the account number
@@ -350,11 +441,11 @@ pub struct Entry {
     /// The overall state of this entry
     pub state: EntryState,
     /// Whether or not this output is marked as having been spent
-    spent: bool,
+    pub spent: bool,
     /// The "trusted input", a txid:vout:amount triple encrypted for the dongle by itself
-    trusted_input: [u8; 56],
-    /// The base58-encoded address of this entry
-    pub address: String,
+    pub trusted_input: [u8; 56],
+    /// The Bitcoin address of this entry
+    pub address: Address,
     /// The BIP32 index of this entry
     pub index: usize,
     /// The txid of the first receive to this address (or all zeros if it's yet unused)
@@ -408,13 +499,14 @@ impl Entry {
         let mut data = [0u8; DECRYPTED_ENTRY_SIZE];
         decrypt(dongle, account, index, &input[..], &mut data)?;
 
-        if data.iter().all(|x| *x == 0) {
+        let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::Address, index as u32))?;
+        if data[164..188].iter().all(|x| *x == 0) {  // check for zeroed out date
             Ok(Entry {
                 state: EntryState::Unused,
                 spent: false,
                 trusted_input: [0; 56],
-                address: String::new(),
-                index: 0,
+                address: FromBase58::from_base58check(&key.b58_address)?,
+                index: index,
                 txid: [0; 32],
                 vout: 0,
                 amount: 0,
@@ -424,8 +516,6 @@ impl Entry {
                 note: String::new()
             })
         } else {
-            let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::Address, index as u32))?;
-
             let secp = Secp256k1::with_caps(ContextFlag::VerifyOnly);
             let sig = convert_compact_to_secp(&data[0..64])?;
             let mut msg_full = vec![0; 300];
@@ -436,15 +526,18 @@ impl Entry {
             let msg = secp256k1::Message::from_slice(&msg_hash).unwrap();
             let verified = secp.verify(&msg, &sig, &key.public_key).is_ok();
 
+            let mut trusted_input = [0; 56]; trusted_input.clone_from_slice(&data[64..120]);
             let mut txid = [0; 32]; txid.clone_from_slice(&data[120..152]);
             let mut date = [0; 24]; date.clone_from_slice(&data[164..188]);
             let mut hash = [0; 32]; hash.clone_from_slice(&data[188..220]);
 
+            println!("parse address {} becomes {:?}", key.b58_address, Address::from_base58check(&key.b58_address));
+
             Ok(Entry {
                 state: if verified { EntryState::Valid } else { EntryState::Invalid },
                 spent: BigEndian::read_u32(&data[332..336]) == 1,
-                trusted_input: [0; 56],
-                address: key.b58_address,
+                trusted_input: trusted_input,
+                address: FromBase58::from_base58check(&key.b58_address)?,
                 index: index,
                 txid: txid,
                 vout: BigEndian::read_u32(&data[152..156]),
@@ -470,7 +563,7 @@ impl fmt::Display for Entry {
             EntryState::Valid => writeln!(f, "Signed Entry:")?
         }
         writeln!(f, "   index: {}", self.index)?;
-        writeln!(f, " address: {}", self.address)?;
+        writeln!(f, " address: {}", self.address.to_base58check())?;
         if self.txid.iter().all(|x| *x == 0) {
             writeln!(f, "    txid: no associated output")?;
         } else {

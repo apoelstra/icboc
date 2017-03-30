@@ -26,8 +26,12 @@ extern crate hex;
 extern crate icebox;
 extern crate simplelog;
 
-use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::blockdata::transaction::{Transaction, TxOut};
+use bitcoin::network::serialize::BitcoinHash;
+use bitcoin::network::serialize::serialize_hex as bitcoin_serialize_hex;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
+use bitcoin::util::address::Address;
+use bitcoin::util::base58::FromBase58;
 use std::{env, io, fs, process};
 use std::io::{Write, BufRead};
 use std::str::FromStr;
@@ -35,6 +39,7 @@ use std::str::FromStr;
 use icebox::dongle::Dongle;
 use icebox::error::Error;
 use icebox::constants::apdu::ledger::sw;
+use icebox::spend::Spend;
 
 /// Prompt the user for some string data
 fn user_prompt(prompt: &str) -> String {
@@ -57,6 +62,11 @@ fn usage_and_die(name: &str) -> ! {
     println!("  {} <filename> getbalance", name);
     println!("  {} <filename> info [address|index]", name);
     println!("  {} <filename> receive <hex tx>", name);
+    println!("");
+    println!("  {} <filename> sendto <feerate> <destination> <amount> [<destination> <amount>...]", name);
+    println!("");
+    println!("All Bitcoin amounts should be specified in satoshi. No decimals.");
+    println!("The feerate is given in satoshis per kilobyte.");
     println!("");
     println!("Note that several commands do a linear scan of the entire wallet,");
     println!("since dongle cooperation is required to decrypt each individual");
@@ -85,6 +95,9 @@ fn pretty_unwrap<T>(msg: &str, res: Result<T, Error>) -> T {
                 }
                 Error::ApduBadStatus(sw::INS_NOT_SUPPORTED) => {
                     println!("Device did not understand something. Are you running the BTC app?");
+                }
+                Error::ApduBadStatus(sw::exception::EXCEPTION) => {
+                    println!("The dongle app threw an exception.");
                 }
                 Error::ApduBadStatus(sw::exception::HALTED) => {
                     println!("The dongle app has halted and will refuse all further messages until it is restarted.");
@@ -269,6 +282,92 @@ fn main() {
                                            icebox::wallet::EncryptedWallet::load(filename));
             pretty_unwrap("Rerandomizing wallet",
                           wallet.rerandomize(&mut dongle));
+            pretty_unwrap("Saving wallet",
+                          wallet.save(filename));
+        }
+        // Spend money
+        "sendto" =>{
+            if args.len() < 6 || args.len() % 2 == 1 {
+                usage_and_die(&args[0]);
+            }
+
+            let filename = &args[1];
+            let mut wallet = pretty_unwrap("Loading wallet",
+                                           icebox::wallet::EncryptedWallet::load(filename));
+
+            // Assemble a "spend" object describing the transaction to be created
+            let mut spend = Spend {
+                input: vec![],
+                change_path: [0; 5],
+                change_amount: 0,
+                output: vec![]
+            };
+            let fee_rate = u64::from_str(&args[3]).expect("Parsing fee rate as number");
+            for i in 4..args.len() {
+                if i % 2 == 1 {
+                    continue;
+                }
+                let addr = Address::from_base58check(&args[i]).expect("Decoding address");
+                let amount = u64::from_str(&args[i + 1]).expect("Parsing amount as number");
+                spend.output.push(TxOut {
+                    value: amount,
+                    script_pubkey: addr.script_pubkey()
+                });
+            }
+            println!("Scanning wallet to find funds and change...");
+            pretty_unwrap("Finding funds and change",
+                          wallet.get_inputs_and_change(&mut dongle, fee_rate, &mut spend));
+
+            // Build transaction
+            let mut tx = Transaction {
+                version: 1,
+                lock_time: 0,
+                input: Vec::with_capacity(spend.input.len()),
+                output: spend.output.clone(),
+                witness: vec![]
+            };
+
+            // Obtain signatures for it
+            for (n, input) in spend.input.iter().enumerate() {
+                println!("Signing for input {} of {}...", n, spend.input.len());
+                let mut txin = input.txin.clone();
+                txin.script_sig = pretty_unwrap("Signing for input",
+                                                wallet.get_script_sig(&mut dongle, &spend, input.index, n > 0));
+                tx.input.push(txin);
+            }
+
+            // Update all affected entries
+            for input in &spend.input {
+                println!("Marking entry {} as spent", input.index);
+                pretty_unwrap("Marking spent",
+                              wallet.mark_spent(&mut dongle, input.index));
+            }
+            // Update change
+            if spend.change_amount > 0 {
+                println!("Recording change output as used. We need a bit of information.");
+                let name = user_prompt("Your name");
+                let block_str = user_prompt("Recent blockhash (pick one say, 20 blocks ago, that is unlikely to be reorged out)");
+                let block: Vec<u8> = hex::FromHex::from_hex(block_str.as_bytes()).expect("decoding blockhash hex");
+                if block.len() != 32 {
+                    println!("A blockhash must be 32 bytes (64 hex characters)");
+                    process::exit(1);
+                }
+                let index = (spend.change_path[4] & 0x7fffffff) as usize;
+                let entry = pretty_unwrap("Updating change entry",
+                                          wallet.update(&mut dongle, index, name, block, format!("change of {:x}", tx.bitcoin_hash())));
+                println!("{}", entry);
+            }
+
+            println!("Processing this as a receive to catch change and self-spends.");
+            pretty_unwrap("Processing transaction",
+                          wallet.receive(&mut dongle, &tx));
+
+            // Rerandomize
+            pretty_unwrap("Rerandomizing wallet",
+                          wallet.rerandomize(&mut dongle));
+
+            // Dump it to the screen and saveout
+            println!("{}", bitcoin_serialize_hex(&tx).unwrap());
             pretty_unwrap("Saving wallet",
                           wallet.save(filename));
         }

@@ -95,7 +95,7 @@ to do. Its features are
  - [x] Search wallet by address rather than BIP32 index
  - [x] Update wallet when payment is received to note txid/vout/amount
  - [x] Allow extending the wallet to add more address entries
- - [ ] Sign transactions
+ - [x] Sign transactions
 
 ## Version 2
 

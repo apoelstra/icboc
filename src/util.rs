@@ -15,6 +15,7 @@
 //! # Miscellaneous Functions
 
 use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::blockdata::script::Script;
 use bitcoin::network::encodable::{ConsensusEncodable, VarInt};
 use bitcoin::network::serialize::RawEncoder;
 use crypto::digest::Digest;
@@ -22,6 +23,7 @@ use crypto::sha2;
 use secp256k1::{Secp256k1, ContextFlag, Signature};
 use secp256k1::key::SecretKey;
 
+use spend::Spend;
 use error::Error;
 
 /// Compute the SHA256 of some slice
@@ -192,5 +194,51 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
 
     (ret_ser_tx, ret_cuts)
 }
+
+/// Wrapper around `encode_marking_cutpoint` that encodes a Spend's inputs correctly
+/// No segwit support
+pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size: usize) -> (Vec<u8>, Vec<usize>) {
+    let mut ret_ser_tx = vec![]; 
+    let mut ret_cuts = vec![0];  // mark initial cut at 0
+
+    // This is quite different from the Bitcoin format as we have to replace some
+    // things with flags to encode inputs using the dongle's "Trusted Inputs"
+    // Encode version
+    encode_marking_cutpoints(&1u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    // Encode inputs
+    encode_marking_cutpoints(&VarInt(spend.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+    for (n, input) in spend.input.iter().enumerate() {
+        ret_ser_tx.push(0x01); // trusted input to follow
+        ret_ser_tx.push(input.trusted_input.len() as u8);
+        ret_ser_tx.extend(&input.trusted_input[..]);
+        if n == index {
+            encode_marking_cutpoints(&input.script_pubkey, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        } else {
+            encode_marking_cutpoints(&Script::new(), &mut ret_ser_tx, &mut ret_cuts, max_size);
+        }
+        encode_marking_cutpoints(&input.txin.sequence, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    }
+    // Halt here, do not encode number of outputs
+    (ret_ser_tx, ret_cuts)
+}
+
+/// Wrapper around `encode_marking_cutpoint` that encodes a Spend's outputs correctly
+pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (Vec<u8>, Vec<usize>) {
+    let mut ret_ser_tx = vec![]; 
+    let mut ret_cuts = vec![0];  // mark initial cut at 0
+
+    // Encode outputs
+    encode_marking_cutpoints(&VarInt(spend.output.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+    for output in &spend.output {
+        encode_marking_cutpoints(&output.value, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        ret_cuts.pop();  // Cut between value and script_pubkey disallowed
+        encode_marking_cutpoints(&output.script_pubkey, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    }
+    // Halt here, do not encode number of outputs
+    (ret_ser_tx, ret_cuts)
+}
+
+
+
 
 

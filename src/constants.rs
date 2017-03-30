@@ -44,11 +44,14 @@ pub mod apdu {
 
         /// Instructions
         pub mod ins {
-            pub const GET_FIRMWARE_VERSION: u8 = 0xc4;
             pub const GET_WALLET_PUBLIC_KEY: u8 = 0x40;
             pub const GET_TRUSTED_INPUT: u8 = 0x42;
+            pub const UNTRUSTED_HASH_TRANSACTION_INPUT_START: u8 = 0x44;
+            pub const UNTRUSTED_HASH_SIGN: u8 = 0x48;
+            pub const UNTRUSTED_HASH_TRANSACTION_INPUT_FINALIZE: u8 = 0x4a;
             pub const SIGN_MESSAGE: u8 = 0x4e;
             pub const GET_RANDOM: u8 = 0xc0;
+            pub const GET_FIRMWARE_VERSION: u8 = 0xc4;
         }
 
         /// Status Words
@@ -81,6 +84,10 @@ pub mod wallet {
     /// Maximum length in bytes of the user ID field
     pub const MAX_USER_ID_BYTES: usize = 32;
     /// Maximum length in bytes of the freeform note field
-    pub const MAX_NOTE_BYTES: usize = 60; }
+    pub const MAX_NOTE_BYTES: usize = 80;
+    /// An amount of satoshis which, if we have change worth less than, we simply
+    /// drop it into fees
+    pub const CHANGE_DUST: u64 = 1_0000; // 0.0001 BTC, around 10c USD
+}
 
 

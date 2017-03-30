@@ -39,6 +39,7 @@ extern crate time;
 pub mod constants;
 pub mod dongle;
 pub mod error;
+pub mod spend;
 pub mod util;
 pub mod wallet;
 

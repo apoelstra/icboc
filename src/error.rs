@@ -45,6 +45,8 @@ pub enum Error {
     ApduWrongSequence,
     /// Received message with invalid length (message, received length)
     ResponseWrongLength(u8, usize),
+    /// An wallet does not have enough money (had, required)
+    InsufficientFunds(u64, u64),
     /// An wallet cannot produce anymore addresses
     WalletFull,
     /// An encrypted wallet had a bad filesize
@@ -123,6 +125,7 @@ impl error::Error for Error {
             Error::ApduWrongTag => "wrong APDU tag (is device running the right app?)",
             Error::ApduWrongSequence => "bad APDU sequence no",
             Error::ResponseWrongLength(_,_) => "bad message length",
+            Error::InsufficientFunds(_,_) => "insufficient funds",
             Error::WalletFull => "wallet is full, it has no more available addresses",
             Error::WalletWrongSize(_) => "wallet had invalid length",
             Error::WalletWrongMagic(_) => "wallet had wrong magic",
@@ -147,6 +150,7 @@ impl fmt::Display for Error {
             Error::Utf8(ref e) => fmt::Display::fmt(e, f),
             Error::ApduBadStatus(sw) => write!(f, "bad APDU status word {}", sw),
             Error::ResponseWrongLength(msg, len) => write!(f, "bad APDU response length {} for message 0x{:02x}", len, msg),
+            Error::InsufficientFunds(had, required) => write!(f, "have {} but need {} satoshi to fund this transaction", had, required),
             Error::WalletWrongSize(len) => write!(f, "bad wallet size {}", len),
             Error::WalletWrongMagic(magic) => write!(f, "bad wallet magic {:08x}", magic),
             Error::UserIdTooLong(used, max) => write!(f, "user ID length {} exceeds max {}", used, max),
