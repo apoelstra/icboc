@@ -39,7 +39,6 @@ impl Input {
     pub fn from_entry(entry: &Entry) -> Input {
         let mut trusted_input = [0; 56];
         trusted_input.copy_from_slice(&entry.trusted_input[..]);
-        println!("trusted input from {}: {:?}", entry.index, &trusted_input[..]);
 
         Input {
             index: entry.index,

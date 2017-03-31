@@ -286,7 +286,6 @@ impl EncryptedWallet {
                     let trusted_input = dongle.get_trusted_input(tx, vout as u32)?;
                     entry.trusted_input.copy_from_slice(&trusted_input[..]);
                     entry.txid.copy_from_slice(&txid[..]);
-                    entry.txid.reverse();  // lol bitcoin
                     entry.vout = vout as u32;
                     entry.amount = out.value;
                     self.entries[i] = entry.sign_and_encrypt(dongle, self.account, i)?;
@@ -567,7 +566,10 @@ impl fmt::Display for Entry {
         if self.txid.iter().all(|x| *x == 0) {
             writeln!(f, "    txid: no associated output")?;
         } else {
-            writeln!(f, "    txid: {}", self.txid.to_hex())?;
+            let mut txid = [0; 32];
+            txid.copy_from_slice(&self.txid[..]);
+            txid.reverse();  // lol bitcoin
+            writeln!(f, "    txid: {}", txid.to_hex())?;
             writeln!(f, "    vout: {}", self.vout)?;
             writeln!(f, "  amount: {}", self.amount)?;
             writeln!(f, "   spent: {}", self.spent)?;
