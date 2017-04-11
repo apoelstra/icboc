@@ -372,14 +372,19 @@ fn main() {
             pretty_unwrap("Processing transaction",
                           wallet.receive(&mut dongle, &tx));
 
-            // Rerandomize
-            pretty_unwrap("Rerandomizing wallet",
-                          wallet.rerandomize(&mut dongle));
+            println!("Please `sendrawtransaction` the following transaction {}", bitcoin_serialize_hex(&tx).unwrap());
+            let yes = user_prompt("If this succeeded type YES to saveout the wallet.");
+            if yes == "YES" {
+                // Rerandomize
+                pretty_unwrap("Rerandomizing wallet",
+                              wallet.rerandomize(&mut dongle));
 
-            // Dump it to the screen and saveout
-            println!("{}", bitcoin_serialize_hex(&tx).unwrap());
-            pretty_unwrap("Saving wallet",
-                          wallet.save(filename));
+                pretty_unwrap("Saving wallet",
+                              wallet.save(filename));
+                println!("Done.");
+            } else {
+                println!("Cancelled.");
+            }
         }
         // Don't recognize command
         _ => usage_and_die(&args[0])
