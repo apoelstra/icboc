@@ -399,10 +399,12 @@ impl EncryptedWallet {
                 }
                 EntryState::Valid => { }
                 EntryState::Received => {
-                    if found_amount < total_amount + (size_bytes * fee_rate / 1000) {
-                        spend.input.push(spend::Input::from_entry(&entry));
-                        size_bytes += 150; // 40 txin stuff, 72 sig, 33 key
-                        found_amount += entry.amount;
+                    if !entry.spent {
+                        if found_amount < total_amount + (size_bytes * fee_rate / 1000) {
+                            spend.input.push(spend::Input::from_entry(&entry));
+                            size_bytes += 150; // 40 txin stuff, 72 sig, 33 key
+                            found_amount += entry.amount;
+                        }
                     }
                 }
             }
