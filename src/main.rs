@@ -27,6 +27,7 @@ extern crate icebox;
 extern crate simplelog;
 
 use bitcoin::blockdata::transaction::{Transaction, TxOut};
+use bitcoin::network::constants::Network;
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::network::serialize::serialize_hex as bitcoin_serialize_hex;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
@@ -55,6 +56,7 @@ fn user_prompt(prompt: &str) -> String {
 fn usage_and_die(name: &str) -> ! {
     println!("Usage: {} <wallet filename> <command>", name);
     println!("  {} <filename> init <account> <n_entries>", name);
+    println!("  {} <filename> init-testnet <account> <n_entries>", name);
     println!("  {} <filename> extend <new n_entries>", name);
     println!("  {} <filename> rerandomize", name);
     println!("");
@@ -137,7 +139,7 @@ fn main() {
     // Decide what to do
     match &args[2][..] {
         // Create a new wallet
-        "init" => {
+        "init" | "init-testnet" => {
             if args.len() < 5 {
                 usage_and_die(&args[0]);
             }
@@ -151,8 +153,15 @@ fn main() {
                 process::exit(1);
             }
 
+            let network;
+            if args[2] == "init-testnet" {
+                network = Network::Testnet;
+            } else {
+                network = Network::Bitcoin;
+            }
+
             let wallet = pretty_unwrap("Creating wallet",
-                                       icebox::wallet::EncryptedWallet::new(&mut dongle, account, entries));
+                                       icebox::wallet::EncryptedWallet::new(&mut dongle, network, account, entries));
             pretty_unwrap("Saving wallet",
                           wallet.save(filename));
         }

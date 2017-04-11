@@ -77,6 +77,8 @@ pub mod wallet {
     /// Magic bytes indicating a wallet file (bottom two are a version)
     /// First six bytes are guaranteed random: used `wget boards.4chan.org/b/ -O - | sha256sum` to compute
     pub const MAGIC: u64 = 0x3160_f90d_aae5_0001;
+    /// Magic bytes indicating a testnet wallet file
+    pub const MAGIC_TESTNET: u64 = 0x3160_f90d_aae5_0002;
     /// Size, in bytes, of the data block for each entry.
     pub const DECRYPTED_ENTRY_SIZE: usize = 336;
     /// Size, in bytes, of the AES-CTR-encrypted data block.

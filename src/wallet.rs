@@ -19,6 +19,7 @@
 
 use bitcoin::blockdata::transaction::{Transaction, TxOut, SigHashType};
 use bitcoin::blockdata::script::{self, Script};
+use bitcoin::network::constants::Network;
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::util::address::Address;
 use bitcoin::util::base58::{FromBase58, ToBase58};
@@ -30,7 +31,7 @@ use std::{fmt, io, fs, str};
 use std::io::{Read, Write};
 use time;
 
-use constants::wallet::{DECRYPTED_ENTRY_SIZE, ENCRYPTED_ENTRY_SIZE, MAGIC, MAX_USER_ID_BYTES, MAX_NOTE_BYTES, CHANGE_DUST};
+use constants::wallet::{DECRYPTED_ENTRY_SIZE, ENCRYPTED_ENTRY_SIZE, MAGIC, MAGIC_TESTNET, MAX_USER_ID_BYTES, MAX_NOTE_BYTES, CHANGE_DUST};
 use dongle::Dongle;
 use error::Error;
 use util::{hash_sha256, convert_compact_to_secp};
@@ -47,7 +48,7 @@ pub enum KeyPurpose {
 }
 
 /// Obtain a BIP32 path corresponding to the appropriate key
-pub fn bip32_path(account: u32, purpose: KeyPurpose, index: u32) -> [u32; 5] {
+pub fn bip32_path(network: Network, account: u32, purpose: KeyPurpose, index: u32) -> [u32; 5] {
     let pp_index = match purpose {
         // 0 and 1 would correspond to "normal" or "change" in BIP44;
         // we deliberately avoid these indices to avoid standard BIP44
@@ -56,13 +57,17 @@ pub fn bip32_path(account: u32, purpose: KeyPurpose, index: u32) -> [u32; 5] {
         KeyPurpose::Address       => 2,
         KeyPurpose::AesKey        => 3,
     };
-    [0x8000002c, 0x80000000, 0x80000000 | account, 0x80000000 | pp_index, 0x80000000 | index]
+    let coin_type = match network {
+        Network::Bitcoin => 0x80000000,
+        Network::Testnet => 0x80000001,
+    };
+    [0x8000002c, coin_type, 0x80000000 | account, 0x80000000 | pp_index, 0x80000000 | index]
 }
 
 // This whole encryption business should be done on the dongle
 /// Helper function to encrypt an entry
-fn encrypt<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8], output: &mut [u8]) -> Result<(), Error> {
-    let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::AesKey, index as u32))?;
+fn encrypt<D: Dongle>(dongle: &mut D, network: Network, account: u32, index: usize, input: &[u8], output: &mut [u8]) -> Result<(), Error> {
+    let key = dongle.get_public_key(&bip32_path(network, account, KeyPurpose::AesKey, index as u32))?;
     let iv = dongle.get_random(16)?;
     let mut encryptor = aes::ctr(aes::KeySize::KeySize256, &key.chaincode[..], &iv);
     output[0..16].copy_from_slice(&iv);
@@ -71,8 +76,8 @@ fn encrypt<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8], 
 }
 
 /// Helper function to decrypt an entry
-fn decrypt<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8], output: &mut [u8]) -> Result<(), Error> {
-    let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::AesKey, index as u32))?;
+fn decrypt<D: Dongle>(dongle: &mut D, network: Network, account: u32, index: usize, input: &[u8], output: &mut [u8]) -> Result<(), Error> {
+    let key = dongle.get_public_key(&bip32_path(network, account, KeyPurpose::AesKey, index as u32))?;
     let iv = &input[0..16];
     let mut encryptor = aes::ctr(aes::KeySize::KeySize256, &key.chaincode[..], iv);
     encryptor.process(&input[16..], output);
@@ -81,14 +86,16 @@ fn decrypt<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8], 
 
 /// Structure representing an encrypted wallet
 pub struct EncryptedWallet {
+    network: Network,
     account: u32,
     entries: Vec<[u8; ENCRYPTED_ENTRY_SIZE]>
 }
 
 impl EncryptedWallet {
     /// Construct a new empty wallet with the given account number
-    pub fn new<D: Dongle>(dongle: &mut D, account: u32, n_entries: usize) -> Result<EncryptedWallet, Error> {
+    pub fn new<D: Dongle>(dongle: &mut D, network: Network, account: u32, n_entries: usize) -> Result<EncryptedWallet, Error> {
         let mut ret = EncryptedWallet {
+            network: network,
             account: account,
             entries: Vec::with_capacity(n_entries)
         };
@@ -98,7 +105,7 @@ impl EncryptedWallet {
             info!("Encrypting zeroes for key {}", i);
             let mut block = [0; ENCRYPTED_ENTRY_SIZE];
             let zeroes = [0; DECRYPTED_ENTRY_SIZE];
-            encrypt(dongle, account, ret.entries.len(), &zeroes, &mut block)?;
+            encrypt(dongle, network, account, ret.entries.len(), &zeroes, &mut block)?;
             ret.entries.push(block);
         }
 
@@ -114,7 +121,7 @@ impl EncryptedWallet {
             info!("Encrypting zeroes for key {}", i);
             let mut block = [0; ENCRYPTED_ENTRY_SIZE];
             let zeroes = [0; DECRYPTED_ENTRY_SIZE];
-            encrypt(dongle, self.account, i, &zeroes, &mut block)?;
+            encrypt(dongle, self.network, self.account, i, &zeroes, &mut block)?;
             self.entries.push(block);
         }
         Ok(())
@@ -126,7 +133,11 @@ impl EncryptedWallet {
         temp_name.push_str(".0");
         let fh = fs::File::create(&temp_name)?;
         let mut buf = io::BufWriter::new(fh);
-        buf.write_u64::<BigEndian>(MAGIC)?;
+        if self.network == Network::Testnet {
+            buf.write_u64::<BigEndian>(MAGIC_TESTNET)?;
+        } else {
+            buf.write_u64::<BigEndian>(MAGIC)?;
+        }
         buf.write_u32::<BigEndian>(self.account)?;
         for data in &self.entries {
             buf.write(&data[..])?;
@@ -146,14 +157,17 @@ impl EncryptedWallet {
         }
 
         let mut ret = EncryptedWallet {
+            network: Network::Bitcoin,
             account: 0,
             entries: Vec::with_capacity(size / ENCRYPTED_ENTRY_SIZE)
         };
 
         let mut fh = fs::File::open(filename)?;
         let magic = fh.read_u64::<BigEndian>()?;
-        if magic != MAGIC {
-            return Err(Error::WalletWrongMagic(magic));
+        match magic {
+            MAGIC => {},
+            MAGIC_TESTNET => { ret.network = Network::Testnet; }
+            _ => { return Err(Error::WalletWrongMagic(magic)); }
         }
 
         ret.account = fh.read_u32::<BigEndian>()?;
@@ -183,15 +197,15 @@ impl EncryptedWallet {
             return Err(Error::EntryOutOfRange(index));
         }
 
-        Entry::decrypt_and_verify(dongle, self.account, index, &self.entries[index])
+        Entry::decrypt_and_verify(dongle, self.network, self.account, index, &self.entries[index])
     }
 
     /// Does a linear scan for a base58-encoded address
     pub fn search<D: Dongle>(&self, dongle: &mut D, address: &str) -> Result<Entry, Error> {
         for (i, entry) in self.entries.iter().enumerate() {
-            let key = dongle.get_public_key(&bip32_path(self.account, KeyPurpose::Address, i as u32))?;
+            let key = dongle.get_public_key(&bip32_path(self.network, self.account, KeyPurpose::Address, i as u32))?;
             if key.b58_address == address {
-                return Entry::decrypt_and_verify(dongle, self.account, i, entry);
+                return Entry::decrypt_and_verify(dongle, self.network, self.account, i, entry);
             }
         }
         Err(Error::AddressNotFound)
@@ -213,7 +227,7 @@ impl EncryptedWallet {
         let mut block = [0; 32];
         block.clone_from_slice(&blockhash);
 
-        let key = dongle.get_public_key(&bip32_path(self.account, KeyPurpose::Address, index as u32))?;
+        let key = dongle.get_public_key(&bip32_path(self.network, self.account, KeyPurpose::Address, index as u32))?;
         let entry = Entry {
             state: EntryState::Valid,
             spent: false,
@@ -229,7 +243,7 @@ impl EncryptedWallet {
             note: note
         };
 
-        self.entries[index] = entry.sign_and_encrypt(dongle, self.account, index)?;
+        self.entries[index] = entry.sign_and_encrypt(dongle, self.network, self.account, index)?;
 
         Ok(entry)
     }
@@ -288,7 +302,7 @@ impl EncryptedWallet {
                     entry.txid.copy_from_slice(&txid[..]);
                     entry.vout = vout as u32;
                     entry.amount = out.value;
-                    self.entries[i] = entry.sign_and_encrypt(dongle, self.account, i)?;
+                    self.entries[i] = entry.sign_and_encrypt(dongle, self.network, self.account, i)?;
                 }
             } // end txo loop
         } // end entries loop
@@ -299,7 +313,7 @@ impl EncryptedWallet {
     pub fn mark_spent<D: Dongle>(&mut self, dongle: &mut D, index: usize) -> Result<(), Error> {
         let mut entry = self.lookup(dongle, index)?;
         entry.spent = true;
-        self.entries[index] = entry.sign_and_encrypt(dongle, self.account, index)?;
+        self.entries[index] = entry.sign_and_encrypt(dongle, self.network, self.account, index)?;
         Ok(())
     }
 
@@ -309,8 +323,8 @@ impl EncryptedWallet {
     pub fn rerandomize<D: Dongle>(&mut self, dongle: &mut D) -> Result<(), Error> {
         for i in 0..self.entries.len() {
             let mut tmp = [0; DECRYPTED_ENTRY_SIZE];
-            decrypt(dongle, self.account, i, &self.entries[i], &mut tmp)?;
-            encrypt(dongle, self.account, i, &tmp, &mut self.entries[i])?;
+            decrypt(dongle, self.network, self.account, i, &self.entries[i], &mut tmp)?;
+            encrypt(dongle, self.network, self.account, i, &tmp, &mut self.entries[i])?;
         }
         Ok(())
     }
@@ -339,7 +353,7 @@ impl EncryptedWallet {
                             script_pubkey: entry.address.script_pubkey(),
                             value: 0
                         });
-                        spend.change_path = bip32_path(self.account, KeyPurpose::Address, i as u32);
+                        spend.change_path = bip32_path(self.network, self.account, KeyPurpose::Address, i as u32);
                         found_change = true;
                     }
                 }
@@ -389,7 +403,7 @@ impl EncryptedWallet {
         let secp = Secp256k1::with_caps(ContextFlag::None);
         dongle.transaction_input_start(spend, index, continuing)?;
         dongle.transaction_input_finalize(spend)?;
-        let signing_pk_path = bip32_path(self.account, KeyPurpose::Address, index as u32);
+        let signing_pk_path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
         let signing_pk = dongle.get_public_key(&signing_pk_path)?;
         let mut vec_sig = dongle.transaction_sign(signing_pk_path, SigHashType::All, 0)?;
         vec_sig[0] = 0x30;
@@ -465,7 +479,7 @@ pub struct Entry {
 
 impl Entry {
     /// Encode an entry, sign the second half of it, and embed the signature in the entry
-    fn sign_and_encrypt<D: Dongle>(&self, dongle: &mut D, account: u32, index: usize) -> Result<[u8; ENCRYPTED_ENTRY_SIZE], Error> {
+    fn sign_and_encrypt<D: Dongle>(&self, dongle: &mut D, network: Network, account: u32, index: usize) -> Result<[u8; ENCRYPTED_ENTRY_SIZE], Error> {
         let mut input = [0; DECRYPTED_ENTRY_SIZE];
         // Copy out the signed data
         input[64..120].copy_from_slice(&self.trusted_input);
@@ -483,22 +497,22 @@ impl Entry {
 
             println!("The dongle will ask you to sign hash {}", hash_sha256(to_sign).to_hex());
             println!("This is the SHA256 of data {}", to_sign.to_hex());
-            dongle.sign_message(to_sign, &bip32_path(account, KeyPurpose::Address, index as u32))?
+            dongle.sign_message(to_sign, &bip32_path(network, account, KeyPurpose::Address, index as u32))?
         };
         input[0..64].copy_from_slice(&sig);
 
         // AES-encrypt the whole thing
         let mut ret = [0; ENCRYPTED_ENTRY_SIZE];
-        encrypt(dongle, account, index, &input, &mut ret)?;
+        encrypt(dongle, network, account, index, &input, &mut ret)?;
         Ok(ret)
     }
 
     /// Interpret a byte sequence as an entry; verify its signature if it's not blank
-    fn decrypt_and_verify<D: Dongle>(dongle: &mut D, account: u32, index: usize, input: &[u8; ENCRYPTED_ENTRY_SIZE]) -> Result<Entry, Error> {
+    fn decrypt_and_verify<D: Dongle>(dongle: &mut D, network: Network, account: u32, index: usize, input: &[u8; ENCRYPTED_ENTRY_SIZE]) -> Result<Entry, Error> {
         let mut data = [0u8; DECRYPTED_ENTRY_SIZE];
-        decrypt(dongle, account, index, &input[..], &mut data)?;
+        decrypt(dongle, network, account, index, &input[..], &mut data)?;
 
-        let key = dongle.get_public_key(&bip32_path(account, KeyPurpose::Address, index as u32))?;
+        let key = dongle.get_public_key(&bip32_path(network, account, KeyPurpose::Address, index as u32))?;
         if data[164..188].iter().all(|x| *x == 0) {  // check for zeroed out date
             Ok(Entry {
                 state: EntryState::Unused,
