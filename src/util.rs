@@ -207,11 +207,11 @@ pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size:
     encode_marking_cutpoints(&1u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
     // Encode inputs
     encode_marking_cutpoints(&VarInt(spend.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
-    for (n, input) in spend.input.iter().enumerate() {
+    for input in &spend.input {
         ret_ser_tx.push(0x01); // trusted input to follow
         ret_ser_tx.push(input.trusted_input.len() as u8);
         ret_ser_tx.extend(&input.trusted_input[..]);
-        if n == index {
+        if input.index == index {
             encode_marking_cutpoints(&input.script_pubkey, &mut ret_ser_tx, &mut ret_cuts, max_size);
         } else {
             encode_marking_cutpoints(&Script::new(), &mut ret_ser_tx, &mut ret_cuts, max_size);
