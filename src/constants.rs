@@ -44,6 +44,7 @@ pub mod apdu {
 
         /// Instructions
         pub mod ins {
+            pub const SET_ALTERNATE_COIN_VERSION: u8 = 0x14;
             pub const GET_WALLET_PUBLIC_KEY: u8 = 0x40;
             pub const GET_TRUSTED_INPUT: u8 = 0x42;
             pub const UNTRUSTED_HASH_TRANSACTION_INPUT_START: u8 = 0x44;

@@ -18,6 +18,7 @@
 //!
 
 use bitcoin::blockdata::transaction::{Transaction, SigHashType};
+use bitcoin::network::constants::Network;
 
 use constants;
 use error::Error;
@@ -133,6 +134,17 @@ pub trait Dongle {
         let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             Ok(rev)
+        } else {
+            Err(Error::ApduBadStatus(sw))
+        }
+    }
+
+    /// Sends the device a `SET ALTERNATE COIN VERSIONS` command
+    fn set_network(&mut self, network: Network) -> Result<(), Error> {
+        let command = message::SetAlternateCoinVersions::new(network);
+        let (sw, _) = try!(self.exchange(command));
+        if sw == constants::apdu::ledger::sw::OK {
+            Ok(())
         } else {
             Err(Error::ApduBadStatus(sw))
         }

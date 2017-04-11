@@ -100,6 +100,7 @@ impl EncryptedWallet {
             entries: Vec::with_capacity(n_entries)
         };
 
+        dongle.set_network(network)?;
 
         for i in 0..n_entries {
             info!("Encrypting zeroes for key {}", i);
@@ -148,7 +149,7 @@ impl EncryptedWallet {
     }
 
     /// Loads a wallet from a file
-    pub fn load(filename: &str) -> Result<EncryptedWallet, Error> {
+    pub fn load<D: Dongle>(dongle: &mut D, filename: &str) -> Result<EncryptedWallet, Error> {
         let meta = fs::metadata(filename)?;
         let size = meta.len() as usize;
 
@@ -176,6 +177,8 @@ impl EncryptedWallet {
             fh.read_exact(&mut entry)?;
             ret.entries.push(entry);
         }
+
+        dongle.set_network(ret.network)?;
 
         Ok(ret)
     }
@@ -543,8 +546,6 @@ impl Entry {
             let mut txid = [0; 32]; txid.clone_from_slice(&data[120..152]);
             let mut date = [0; 24]; date.clone_from_slice(&data[164..188]);
             let mut hash = [0; 32]; hash.clone_from_slice(&data[188..220]);
-
-            println!("parse address {} becomes {:?}", key.b58_address, Address::from_base58check(&key.b58_address));
 
             Ok(Entry {
                 state: if verified { EntryState::Valid } else { EntryState::Invalid },

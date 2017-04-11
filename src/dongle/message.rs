@@ -19,6 +19,7 @@
 //!
 
 use bitcoin::blockdata::transaction::{Transaction, SigHashType};
+use bitcoin::network::constants::Network;
 use byteorder::{WriteBytesExt, BigEndian};
 use secp256k1::{Secp256k1, ContextFlag};
 use secp256k1::key::PublicKey;
@@ -723,13 +724,13 @@ pub struct UntrustedHashSign {
     bip32_path: [u32; 5],
     sighash: SigHashType,
     locktime: u32
-}           
-            
+}
+
 impl UntrustedHashSign {
     /// Constructor
     pub fn new(bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> UntrustedHashSign {
         assert!(bip32_path.len() < 11);  // limitation of the Nano S
-                
+
         UntrustedHashSign {
             sent: false,
             reply: vec![],
@@ -737,17 +738,17 @@ impl UntrustedHashSign {
             bip32_path: bip32_path,
             sighash: sighash,
             locktime: locktime
-        }   
-    }       
-}           
-            
+        }
+    }
+}
+
 impl Command for UntrustedHashSign {
     fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;
-        }   
+        }
         self.sent = true;
-            
+
         let mut ret = Vec::with_capacity(5 + 4 * self.bip32_path.len());
         ret.push(apdu::ledger::BTCHIP_CLA);
         ret.push(apdu::ledger::ins::UNTRUSTED_HASH_SIGN);
@@ -757,13 +758,13 @@ impl Command for UntrustedHashSign {
         ret.push(self.bip32_path.len() as u8);
         for childnum in &self.bip32_path {
             let _ = ret.write_u32::<BigEndian>(*childnum);
-        }       
+        }
         ret.push(0x00); // user validation code
         let _ = ret.write_u32::<BigEndian>(self.locktime);
         ret.push(self.sighash.as_u32() as u8);
         Some(ret)
     }
-            
+
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
         if data.len() < 2 {
             return Err(Error::UnexpectedEof);
@@ -777,6 +778,71 @@ impl Command for UntrustedHashSign {
 
     fn into_reply(self) -> (u16, Vec<u8>) {
         (self.sw, self.reply)
+    }
+}
+
+/// SET ALTERNATE COIN VERSIONS message
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetAlternateCoinVersions {
+    sent: bool,
+    sw: u16,
+    pubkey_version: u16,
+    script_version: u16
+}
+
+impl SetAlternateCoinVersions {
+    /// Constructor
+    pub fn new(network: Network) -> SetAlternateCoinVersions {
+        match network {
+            Network::Bitcoin => {
+                SetAlternateCoinVersions {
+                    sent: false,
+                    sw: 0,
+                    pubkey_version: 0,
+                    script_version: 5
+                }
+            }
+            Network::Testnet => {
+                SetAlternateCoinVersions {
+                    sent: false,
+                    sw: 0,
+                    pubkey_version: 111,
+                    script_version: 196
+                }
+            }
+        }
+    }
+}
+
+impl Command for SetAlternateCoinVersions {
+    fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
+        if self.sent {
+            return None;
+        }
+        self.sent = true;
+
+        let mut ret = Vec::with_capacity(7);
+        ret.push(apdu::ledger::BTCHIP_CLA);
+        ret.push(apdu::ledger::ins::SET_ALTERNATE_COIN_VERSION);
+        ret.push(0x00);
+        ret.push(0x00);
+        ret.push(0x05);
+        let _ = ret.write_u16::<BigEndian>(self.pubkey_version);
+        let _ = ret.write_u16::<BigEndian>(self.script_version);
+        ret.push(0x01);  // "Bitcoin family"
+        Some(ret)
+    }
+
+    fn decode_reply(&mut self, data: Vec<u8>) -> Result<(), Error> {
+        if data.len() != 2 {
+            return Err(Error::UnexpectedEof);
+        }
+        self.sw = ((data[0] as u16) << 8) + data[1] as u16;
+        Ok(())
+    }
+
+    fn into_reply(self) -> (u16, Vec<u8>) {
+        (self.sw, vec![])
     }
 }
 

@@ -175,7 +175,7 @@ fn main() {
             let n_entries = usize::from_str(&args[3]).expect("Parsing n_entries as number");
 
             let mut wallet = pretty_unwrap("Loading wallet",
-                                           icebox::wallet::EncryptedWallet::load(filename));
+                                           icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             if wallet.n_entries() >= n_entries {
                 println!("Wallet already has {} entries, not decreasing.", wallet.n_entries());
             } else {
@@ -193,7 +193,7 @@ fn main() {
 
             let filename = &args[1];
             let wallet = pretty_unwrap("Loading wallet",
-                                       icebox::wallet::EncryptedWallet::load(filename));
+                                       icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             println!("Wallet: {} entries, account {}.", wallet.n_entries(), wallet.account());
             if args.len() > 3 {
                 // An index > length 10 is an address, we scan for it
@@ -218,7 +218,7 @@ fn main() {
 
             let filename = &args[1];
             let mut wallet = pretty_unwrap("Loading wallet",
-                                           icebox::wallet::EncryptedWallet::load(filename));
+                                           icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             let index;
             if args.len() > 3 {
                 index = usize::from_str(&args[3]).expect("Parsing index as number");
@@ -257,7 +257,7 @@ fn main() {
         "getbalance" => {
             let filename = &args[1];
             let wallet = pretty_unwrap("Loading wallet",
-                                       icebox::wallet::EncryptedWallet::load(filename));
+                                       icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             let balance = pretty_unwrap("Checking balance",
                                         wallet.get_balance(&mut dongle));
             println!("Balance: {}", balance);
@@ -270,7 +270,7 @@ fn main() {
 
             let filename = &args[1];
             let mut wallet = pretty_unwrap("Loading wallet",
-                                           icebox::wallet::EncryptedWallet::load(filename));
+                                           icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             let tx_bytes: Vec<u8> = hex::FromHex::from_hex(args[3].as_bytes()).expect("decoding tx hex");
             let tx: Transaction = bitcoin_deserialize(&tx_bytes).expect("decoding transaction");
 
@@ -288,7 +288,7 @@ fn main() {
         "rerandomize" => {
             let filename = &args[1];
             let mut wallet = pretty_unwrap("Loading wallet",
-                                           icebox::wallet::EncryptedWallet::load(filename));
+                                           icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             pretty_unwrap("Rerandomizing wallet",
                           wallet.rerandomize(&mut dongle));
             pretty_unwrap("Saving wallet",
@@ -302,7 +302,7 @@ fn main() {
 
             let filename = &args[1];
             let mut wallet = pretty_unwrap("Loading wallet",
-                                           icebox::wallet::EncryptedWallet::load(filename));
+                                           icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
 
             // Assemble a "spend" object describing the transaction to be created
             let mut spend = Spend {
