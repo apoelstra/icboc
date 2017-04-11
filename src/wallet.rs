@@ -184,7 +184,7 @@ impl EncryptedWallet {
     pub fn next_unused_index<D: Dongle>(&self, dongle: &mut D) -> Result<usize, Error> {
         for i in 0..self.entries.len() {
             let entry = self.lookup(dongle, i)?;
-            if entry.state != EntryState::Unused {
+            if entry.state == EntryState::Unused {
                 return Ok(entry.index)
             }
         }
