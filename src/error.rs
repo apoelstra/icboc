@@ -61,6 +61,8 @@ pub enum Error {
     EntryOutOfRange(usize),
     /// Searched for an address not in the wallet
     AddressNotFound,
+    /// Attempted to receive twice to one address
+    DoubleReceive,
     /// Received an unparseable signature
     BadSignature,
     /// The dongle requested we do something unsupported
@@ -133,6 +135,7 @@ impl error::Error for Error {
             Error::NoteTooLong(_, _) => "note too long",
             Error::EntryOutOfRange(_) => "tried to access entry outside of wallet",
             Error::AddressNotFound => "address not found in wallet",
+            Error::DoubleReceive => "attempted to receive twice to same address",
             Error::BadSignature => "unparseable signature",
             Error::Unsupported => "we were asked to do something unsupported",
             Error::UnexpectedEof => "unexpected end of data"

@@ -28,7 +28,6 @@ extern crate simplelog;
 
 use bitcoin::blockdata::transaction::{Transaction, TxOut};
 use bitcoin::network::constants::Network;
-use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::network::serialize::serialize_hex as bitcoin_serialize_hex;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
 use bitcoin::util::address::Address;
@@ -41,6 +40,7 @@ use icebox::dongle::Dongle;
 use icebox::error::Error;
 use icebox::constants::apdu::ledger::sw;
 use icebox::spend::Spend;
+use icebox::wallet::Update;
 
 /// Prompt the user for some string data
 fn user_prompt(prompt: &str) -> String {
@@ -241,7 +241,7 @@ fn main() {
                 let note = user_prompt("Note to tag address with");
 
                 let entry = pretty_unwrap("Updating entry",
-                                          wallet.update(&mut dongle, index, name, block, note));
+                                          wallet.update(&mut dongle, index, name, block, Update::Unused(note)));
                 println!("{}", entry);
                 println!("Rerandomizing wallet...");
                 pretty_unwrap("Rerandomizing wallet",
@@ -309,6 +309,7 @@ fn main() {
                 input: vec![],
                 change_path: [0; 5],
                 change_amount: 0,
+                change_vout: 0,
                 output: vec![]
             };
             let fee_rate = u64::from_str(&args[3]).expect("Parsing fee rate as number");
@@ -338,7 +339,7 @@ fn main() {
 
             // Obtain signatures for it
             for (n, input) in spend.input.iter().enumerate() {
-                println!("Signing for input {} of {}...", n, spend.input.len());
+                println!("Signing for input {} of {}...", n + 1, spend.input.len());
                 let mut txin = input.txin.clone();
                 txin.script_sig = pretty_unwrap("Signing for input",
                                                 wallet.get_script_sig(&mut dongle, &spend, input.index, n > 0));
@@ -363,11 +364,11 @@ fn main() {
                 }
                 let index = (spend.change_path[4] & 0x7fffffff) as usize;
                 let entry = pretty_unwrap("Updating change entry",
-                                          wallet.update(&mut dongle, index, name, block, format!("change of {:x}", tx.bitcoin_hash())));
+                                          wallet.update(&mut dongle, index, name, block, Update::Change(&tx, spend.change_vout)));
                 println!("{}", entry);
             }
 
-            println!("Processing this as a receive to catch change and self-spends.");
+            println!("Processing this as a receive to self-spends.");
             pretty_unwrap("Processing transaction",
                           wallet.receive(&mut dongle, &tx));
 

@@ -60,6 +60,8 @@ pub struct Spend {
     pub input: Vec<Input>,
     /// A BIP32 path to the address we plan to use for change
     pub change_path: [u32; 5],
+    /// Which output has change in it
+    pub change_vout: u32,
     /// The amount to allocate to change
     pub change_amount: u64,
     /// A list of outputs, including the change one

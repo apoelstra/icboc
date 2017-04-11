@@ -84,6 +84,14 @@ fn decrypt<D: Dongle>(dongle: &mut D, network: Network, account: u32, index: usi
     Ok(())
 }
 
+/// Extra information needed when updating an entry
+pub enum Update<'a> {
+    /// This entry should be labelled etc but has not yet received any coins
+    Unused(String),
+    /// This entry is created as change so is immediately used
+    Change(&'a Transaction, u32)
+}
+
 /// Structure representing an encrypted wallet
 pub struct EncryptedWallet {
     network: Network,
@@ -215,12 +223,9 @@ impl EncryptedWallet {
     }
 
     /// Update an address entry to indicate that it is in use
-    pub fn update<D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Vec<u8>, note: String) -> Result<Entry, Error> {
+    pub fn update<'a, D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Vec<u8>, data: Update<'a>) -> Result<Entry, Error> {
         if user.as_bytes().len() > MAX_USER_ID_BYTES {
             return Err(Error::UserIdTooLong(user.as_bytes().len(), MAX_USER_ID_BYTES));
-        }
-        if note.as_bytes().len() > MAX_NOTE_BYTES {
-            return Err(Error::NoteTooLong(note.as_bytes().len(), MAX_NOTE_BYTES));
         }
 
         let timestr = time::strftime("%F %T%z", &time::now()).unwrap();
@@ -231,15 +236,43 @@ impl EncryptedWallet {
         block.clone_from_slice(&blockhash);
 
         let key = dongle.get_public_key(&bip32_path(self.network, self.account, KeyPurpose::Address, index as u32))?;
+
+        let state;
+        let note;
+        let mut trusted_input = [0; 56];
+        let mut txid = [0; 32];
+        let vout;
+        let amount;
+        match data {
+            Update::Unused(note_) => {
+                state = EntryState::Valid;
+                if note_.as_bytes().len() > MAX_NOTE_BYTES {
+                    return Err(Error::NoteTooLong(note_.as_bytes().len(), MAX_NOTE_BYTES));
+                }
+                note = note_;
+                vout = 0;
+                amount = 0;
+            }
+            Update::Change(tx, vout_) => {
+                let hash = tx.bitcoin_hash();
+                state = EntryState::Received;
+                note = format!("change of {:x}", hash);
+                let trusted_input_ = dongle.get_trusted_input(tx, vout_)?;
+                trusted_input.copy_from_slice(&trusted_input_[..]);
+                txid.copy_from_slice(&hash[..]);
+                vout = vout_;
+                amount = tx.output[vout as usize].value;
+            }
+        }
         let entry = Entry {
-            state: EntryState::Valid,
+            state: state,
             spent: false,
-            trusted_input: [0; 56],
+            trusted_input: trusted_input,
             address: FromBase58::from_base58check(&key.b58_address)?,
             index: index,
-            txid: [0; 32],
-            vout: 0,
-            amount: 0,
+            txid: txid,
+            vout: vout,
+            amount: amount,
             date: timesl,
             user: user,
             blockhash: block,
@@ -284,28 +317,30 @@ impl EncryptedWallet {
                     match entry.state {
                         EntryState::Unused => unreachable!(),
                         EntryState::Invalid => {
-                            error!("Entry has a bad signature. Refusing to recognize this receive.");
-                            error!("(You can work around this by creating another wallet with account {},", self.account);
-                            error!("doing `getaddress {}` on it, and sweeping the coins to this one.)", i);
-                            continue;
+                            error!("Entry has a bad signature (wallet is corrupted?). Rejecting this transaction.");
+                            return Err(Error::BadSignature);
+                        }
+                        EntryState::Received => {
+                            if &entry.txid[..] == &txid[..] && entry.vout == vout as u32 {
+                                warn!("Have receive of {}:{} already recorded", txid, vout);
+                            } else {
+                                error!("Entry has already received coins. Rejecting this transaction.");
+                                error!("(You can work around this by creating another wallet with account {},", self.account);
+                                error!("doing `getaddress {}` on it, and sweeping the coins to this one.)", i);
+                                return Err(Error::DoubleReceive);
+                            }
                         }
                         EntryState::Valid => {
-                            // TODO check that entry is not already used
+                            // Ok, update
+                            let trusted_input = dongle.get_trusted_input(tx, vout as u32)?;
+                            entry.state = EntryState::Received;
+                            entry.trusted_input.copy_from_slice(&trusted_input[..]);
+                            entry.txid.copy_from_slice(&txid[..]);
+                            entry.vout = vout as u32;
+                            entry.amount = out.value;
+                            self.entries[i] = entry.sign_and_encrypt(dongle, self.network, self.account, i)?;
                         }
                     }
-                    if entry.txid.iter().any(|x| *x != 0) {
-                        error!("Entry already has a receive. Refusing to recognize this receive.");
-                        error!("(You can work around this by creating another wallet with account {},", self.account);
-                        error!("doing `getaddress {}` on it, and sweeping the coins to this one.)", i);
-                        continue;
-                    }
-                    // Ok, update
-                    let trusted_input = dongle.get_trusted_input(tx, vout as u32)?;
-                    entry.trusted_input.copy_from_slice(&trusted_input[..]);
-                    entry.txid.copy_from_slice(&txid[..]);
-                    entry.vout = vout as u32;
-                    entry.amount = out.value;
-                    self.entries[i] = entry.sign_and_encrypt(dongle, self.network, self.account, i)?;
                 }
             } // end txo loop
         } // end entries loop
@@ -351,7 +386,6 @@ impl EncryptedWallet {
             match entry.state {
                 EntryState::Unused => {
                     if !found_change {
-                        println!("translating change from {:?}", entry.address);
                         spend.output.push(TxOut {
                             script_pubkey: entry.address.script_pubkey(),
                             value: 0
@@ -363,7 +397,8 @@ impl EncryptedWallet {
                 EntryState::Invalid => {
                     warn!("Skipping output {} which has a bad signature.", i);
                 }
-                EntryState::Valid => {
+                EntryState::Valid => { }
+                EntryState::Received => {
                     if found_amount < total_amount + (size_bytes * fee_rate / 1000) {
                         spend.input.push(spend::Input::from_entry(&entry));
                         size_bytes += 150; // 40 txin stuff, 72 sig, 33 key
@@ -392,6 +427,7 @@ impl EncryptedWallet {
         } else {
             spend.change_amount = computed_change;
             spend.output.last_mut().unwrap().value = computed_change;
+            spend.change_vout = spend.output.len() as u32 - 1;  // TODO shuffle
             if !found_change {
                 return Err(Error::WalletFull);
             }
@@ -426,8 +462,10 @@ impl EncryptedWallet {
 pub enum EntryState {
     /// Entry is all zeroes
     Unused,
-    /// Entry is nonzero and has a valid signature
+    /// Entry is nonzero but has no associated txout
     Valid,
+    /// Entry is nonzero and has an associated txout
+    Received,
     /// Entry is nonzero but has an invalid signature
     Invalid
 }
@@ -547,8 +585,19 @@ impl Entry {
             let mut date = [0; 24]; date.clone_from_slice(&data[164..188]);
             let mut hash = [0; 32]; hash.clone_from_slice(&data[188..220]);
 
+            let state;
+            if verified {
+                if trusted_input.iter().all(|x| *x == 0) {
+                    state = EntryState::Valid;
+                } else {
+                    state = EntryState::Received;
+                }
+            } else {
+                state = EntryState::Invalid;
+            }
+
             Ok(Entry {
-                state: if verified { EntryState::Valid } else { EntryState::Invalid },
+                state: state,
                 spent: BigEndian::read_u32(&data[332..336]) == 1,
                 trusted_input: trusted_input,
                 address: FromBase58::from_base58check(&key.b58_address)?,
@@ -574,11 +623,12 @@ impl fmt::Display for Entry {
         match self.state {
             EntryState::Unused => return write!(f, "[unused]"),
             EntryState::Invalid => writeln!(f, "**** INVALID SIGNATURE **** :")?,
-            EntryState::Valid => writeln!(f, "Signed Entry:")?
+            EntryState::Valid => writeln!(f, "Signed Entry (unused):")?,
+            EntryState::Received => writeln!(f, "Signed Entry (used):")?
         }
         writeln!(f, "   index: {}", self.index)?;
         writeln!(f, " address: {}", self.address.to_base58check())?;
-        if self.txid.iter().all(|x| *x == 0) {
+        if self.state != EntryState::Received {
             writeln!(f, "    txid: no associated output")?;
         } else {
             let mut txid = [0; 32];
