@@ -1,12 +1,15 @@
 
-# Icebox
+# ICBOC
 
-Icebox is a cold wallet designed to work with the Ledger Nano S on an offline
+ICBOC, or "Ice Cold Box of Coins", was originally named Icebox, but it turned
+out that this collided with the pre-existing [Icebox project](https://github.com/ConsenSys/icebox).
+The current name was chosen to be awkward enough to avoid collisions, while
+still sounding kinda like "icebox".
+
+ICBOC is a cold wallet designed to work with the Ledger Nano S on an offline
 computer. It is designed for power users willing to do a fair bit of work to
 send transactions. Currently it is under development and it is strongly
-discouraged to use it. In particular, there is no support for sending coins,
-so if you send coins to this wallet, *you will need to write the code to
-retrieve them*.
+discouraged to use it.
 
 It is designed around the principle that each address corresponds to one
 payment, and while address should appear uniformly random, the wallet should
@@ -24,11 +27,11 @@ database of information about addresses that have been used.
 To generate a new wallet, choose a BIP44 account number and a number of
 address to support initially.
 
-    icebox wallet.icebox.dat init 0 100
+    icboc wallet.icboc.dat init 0 100
 
 To get a new address, do
 
-    icebox wallet.icebox.dat getaddress
+    icboc wallet.icboc.dat getaddress
 
 This will prompt you for some information and eventually output an address
 entry:
@@ -44,12 +47,12 @@ entry:
 
 You can retrieve this at any time by using its index:
 
-    icebox wallet.icebox.dat info 0
+    icboc wallet.icboc.dat info 0
 
 or by its address (though this will require retrieving addresses from the
 dongle until it's found, there is no index for privacy reasons):
 
-    icebox wallet.icebox.dat info 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
+    icboc wallet.icboc.dat info 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
 
 Later, if you receive coins to this address, you can inform the wallet by
 giving it the entire hex-encoded rawtransaction. The entire transaction is
@@ -57,7 +60,7 @@ required by the Ledger because this is the only way it can confirm the
 input values it's signing off on, when signing coins. (One of the many
 SegWit provides is to fix this inconvenience.)
 
-    icebox wallet.icebox.dat receive 02000000011aef8cfaec49ab111d6240c6ce609d430c7ec990307dfca6f6addb7c82152e710000000000feffffff02935b9800000000001976a9141285a7fe04cd6df5e5b93b56bc0ef171332e85f588ac40597307000000001976a9140295ec35d638c16b25608b4e362a214a5692d20088ac00000000
+    icboc wallet.icboc.dat receive 02000000011aef8cfaec49ab111d6240c6ce609d430c7ec990307dfca6f6addb7c82152e710000000000feffffff02935b9800000000001976a9141285a7fe04cd6df5e5b93b56bc0ef171332e85f588ac40597307000000001976a9140295ec35d638c16b25608b4e362a214a5692d20088ac00000000
 
 The wallet will read the transaction, detect which outputs belong to it,
 and update the appropriate entries:
@@ -83,9 +86,9 @@ updated to reflect the unspent output information, as
 
 ## Version 1
 
-The first version of Icebox is designed to work with the Bitcoin app that comes
+The first version of ICBOC is designed to work with the Bitcoin app that comes
 with the Nano S, whose [source code is available here](https://github.com/LedgerHQ/blue-app-btc/issues).
-As such, it will not be able to do everything that Icebox is eventually intended
+As such, it will not be able to do everything that ICBOC is eventually intended
 to do. Its features are
 
  - [x] Generate addresses, prompting the user for some extra information to tag it with
@@ -99,7 +102,7 @@ to do. Its features are
 
 ## Version 2
 
-The next version of Icebox will include its own Ledger application which will
+The next version of ICBOC will include its own Ledger application which will
 fork the Bitcoin app to add some extra functionality.
 
  - [ ] Do decryption/encryption on the dongle rather than querying for encryption keys

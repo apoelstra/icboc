@@ -7,7 +7,7 @@ authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "icebox"
+name = "icboc"
 path = "src/main.rs"
 
 [dependencies]
