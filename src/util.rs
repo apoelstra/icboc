@@ -14,13 +14,14 @@
 
 //! # Miscellaneous Functions
 
+use base64;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::blockdata::script::Script;
 use bitcoin::network::encodable::{ConsensusEncodable, VarInt};
 use bitcoin::network::serialize::RawEncoder;
 use crypto::digest::Digest;
 use crypto::sha2;
-use secp256k1::{Secp256k1, ContextFlag, Signature};
+use secp256k1::{Secp256k1, ContextFlag, RecoverableSignature, Signature, Message};
 use secp256k1::key::SecretKey;
 
 use spend::Spend;
@@ -116,6 +117,15 @@ pub fn convert_compact_to_secp(sig: &[u8]) -> Result<Signature, Error> {
     Ok(sig)
 }
 
+/// Converts a compact-encoded signature into a base64-encoded string that
+/// can be verified by the `verifymessage` RPC in Bitcoin Core
+pub fn convert_compact_to_signmessage_rpc(sig: &[u8]) -> Result<String, Error> {
+    // Our "compact encoding" in fact exactly matches that of a libsecp compact sig
+    // with recovery ID zero, so we simply prepend a 31 and base-64 encode it.
+    let mut ret = vec![31u8];
+    ret.extend(sig);
+    Ok(base64::encode(&ret))
+}
 
 /// Transactions are sent to the device in a bit of a weird way. Each individual
 /// transaction component needs to be sent to the device intact (except possibly

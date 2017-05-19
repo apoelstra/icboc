@@ -235,7 +235,8 @@ impl EncryptedWallet {
         let mut block = [0; 32];
         block.clone_from_slice(&blockhash);
 
-        let key = dongle.get_public_key(&bip32_path(self.network, self.account, KeyPurpose::Address, index as u32))?;
+        let path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
+        let key = dongle.get_public_key(&path)?;
 
         let state;
         let note;
@@ -266,6 +267,7 @@ impl EncryptedWallet {
         }
         let entry = Entry {
             state: state,
+            bip32_path: path,
             spent: false,
             trusted_input: trusted_input,
             address: FromBase58::from_base58check(&key.b58_address)?,
@@ -496,6 +498,8 @@ pub enum EntryState {
 pub struct Entry {
     /// The overall state of this entry
     pub state: EntryState,
+    /// The BIP32 path leading to this entry's address
+    pub bip32_path: [u32; 5],
     /// Whether or not this output is marked as having been spent
     pub spent: bool,
     /// The "trusted input", a txid:vout:amount triple encrypted for the dongle by itself
@@ -555,10 +559,12 @@ impl Entry {
         let mut data = [0u8; DECRYPTED_ENTRY_SIZE];
         decrypt(dongle, network, account, index, &input[..], &mut data)?;
 
-        let key = dongle.get_public_key(&bip32_path(network, account, KeyPurpose::Address, index as u32))?;
+        let path = bip32_path(network, account, KeyPurpose::Address, index as u32);
+        let key = dongle.get_public_key(&path)?;
         if data[164..188].iter().all(|x| *x == 0) {  // check for zeroed out date
             Ok(Entry {
                 state: EntryState::Unused,
+                bip32_path: path,
                 spent: false,
                 trusted_input: [0; 56],
                 address: FromBase58::from_base58check(&key.b58_address)?,
@@ -600,6 +606,7 @@ impl Entry {
 
             Ok(Entry {
                 state: state,
+                bip32_path: path,
                 spent: BigEndian::read_u32(&data[332..336]) == 1,
                 trusted_input: trusted_input,
                 address: FromBase58::from_base58check(&key.b58_address)?,
@@ -613,6 +620,13 @@ impl Entry {
                 note: String::from_utf8(data[252..332].to_owned())?
             })
         }
+    }
+
+    /// Produce a Bitcoin signed message using this entry's address
+    pub fn sign_message<D: Dongle>(&self, dongle: &mut D, msg: &str) -> Result<[u8; 64], Error> {
+        let msg = msg.as_bytes();
+        println!("The dongle will ask you to sign hash {}", hash_sha256(msg).to_hex());
+        Ok(dongle.sign_message(msg, &self.bip32_path)?)
     }
 }
 

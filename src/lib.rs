@@ -27,6 +27,7 @@
 #![deny(unused_mut)]
 #![deny(missing_docs)]
 
+extern crate base64;
 extern crate bitcoin;
 extern crate byteorder;
 extern crate crypto;

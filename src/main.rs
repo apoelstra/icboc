@@ -31,7 +31,7 @@ use bitcoin::network::constants::Network;
 use bitcoin::network::serialize::serialize_hex as bitcoin_serialize_hex;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
 use bitcoin::util::address::Address;
-use bitcoin::util::base58::FromBase58;
+use bitcoin::util::base58::{ToBase58, FromBase58};
 use std::{env, io, fs, process};
 use std::io::{Write, BufRead};
 use std::str::FromStr;
@@ -41,6 +41,7 @@ use icebox::error::Error;
 use icebox::constants::apdu::ledger::sw;
 use icebox::spend::Spend;
 use icebox::wallet::Update;
+use icebox::util::convert_compact_to_signmessage_rpc;
 
 /// Prompt the user for some string data
 fn user_prompt(prompt: &str) -> String {
@@ -63,6 +64,7 @@ fn usage_and_die(name: &str) -> ! {
     println!("  {} <filename> getaddress [address index]", name);
     println!("  {} <filename> getbalance", name);
     println!("  {} <filename> info [address|index]", name);
+    println!("  {} <filename> signmessage [address|index] [message]", name);
     println!("  {} <filename> receive <hex tx>", name);
     println!("");
     println!("  {} <filename> sendto <feerate> <destination> <amount> [<destination> <amount>...]", name);
@@ -209,6 +211,28 @@ fn main() {
                     println!("{}", entry);
                 }
             }
+        }
+        // Sign a message with a specific entry
+        "signmessage" => {
+            if args.len() < 5 {
+                usage_and_die(&args[0]);
+            }
+
+            let filename = &args[1];
+            let wallet = pretty_unwrap("Loading wallet",
+                                       icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
+            // An index > length 10 is an address, we scan for it
+            let entry = if args[3].len() > 10 {
+                pretty_unwrap("Searching for entry", wallet.search(&mut dongle, &args[3]))
+            } else {
+            // Otherwise take the index as an index
+                let index = usize::from_str(&args[3]).expect("Parsing index as number");
+                pretty_unwrap("Decrypting entry", wallet.lookup(&mut dongle, index))
+            };
+            let sig = pretty_unwrap("Getting signature", entry.sign_message(&mut dongle, &args[4]));
+            let sig64 = pretty_unwrap("Encoding sig as base64", convert_compact_to_signmessage_rpc(&sig[..]));
+            println!("{}", entry.address.to_base58check());
+            println!("{}", sig64);
         }
         // Update a new unused address slot
         "getaddress" => {
