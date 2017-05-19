@@ -472,7 +472,7 @@ pub struct GetTrustedInput {
 impl GetTrustedInput {
     /// Constructor: ser_tx is the full transaction, vout is the index of the output we care about
     pub fn new(tx: &Transaction, vout: u32, apdu_size: usize) -> GetTrustedInput {
-        let (ser_tx, cuts) = encode_transaction_with_cutpoints(tx, apdu_size);
+        let (ser_tx, cuts) = encode_transaction_with_cutpoints(tx, apdu_size - 9);
         GetTrustedInput {
             sent_cuts: 0,
             reply: vec![],
