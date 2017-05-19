@@ -21,7 +21,7 @@ use bitcoin::network::encodable::{ConsensusEncodable, VarInt};
 use bitcoin::network::serialize::RawEncoder;
 use crypto::digest::Digest;
 use crypto::sha2;
-use secp256k1::{Secp256k1, ContextFlag, RecoverableSignature, Signature, Message};
+use secp256k1::{Secp256k1, ContextFlag, Signature};
 use secp256k1::key::SecretKey;
 
 use spend::Spend;
