@@ -167,18 +167,20 @@ pub struct GetWalletPublicKey<'a> {
     reply: Vec<u8>,
     sw: u16,
     bip32_path: &'a [u32],
+    display: bool
 }
 
 impl<'a> GetWalletPublicKey<'a> {
     /// Constructor
-    pub fn new(bip32_path: &'a [u32]) -> GetWalletPublicKey {
+    pub fn new(bip32_path: &'a [u32], display: bool) -> GetWalletPublicKey {
         assert!(bip32_path.len() < 11);  // limitation of the Nano S
 
         GetWalletPublicKey {
             sent: false,
             reply: vec![],
             sw: 0,
-            bip32_path: bip32_path
+            bip32_path: bip32_path,
+            display: display
         }
     }
 }
@@ -193,7 +195,7 @@ impl<'a> Command for GetWalletPublicKey<'a> {
         let mut ret = Vec::with_capacity(5 + 4 * self.bip32_path.len());
         ret.push(apdu::ledger::BTCHIP_CLA);
         ret.push(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY);
-        ret.push(0);
+        ret.push(if self.display {1} else {0});
         ret.push(0);
         ret.push((1 + 4 * self.bip32_path.len()) as u8);
         ret.push(self.bip32_path.len() as u8);

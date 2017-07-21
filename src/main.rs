@@ -267,6 +267,8 @@ fn main() {
                 let entry = pretty_unwrap("Updating entry",
                                           wallet.update(&mut dongle, index, name, block, Update::Unused(note)));
                 println!("{}", entry);
+                pretty_unwrap("Confirming address",
+                              wallet.display(&mut dongle, index));
                 println!("Rerandomizing wallet...");
                 pretty_unwrap("Rerandomizing wallet",
                               wallet.rerandomize(&mut dongle));

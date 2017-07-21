@@ -50,8 +50,8 @@ pub trait Dongle {
     }
 
     /// Queries the device for a BIP32 extended pubkey
-    fn get_public_key(&mut self, bip32_path: &[u32]) -> Result<message::WalletPublicKey, Error> {
-        let command = message::GetWalletPublicKey::new(bip32_path);;
+    fn get_public_key(&mut self, bip32_path: &[u32], display: bool) -> Result<message::WalletPublicKey, Error> {
+        let command = message::GetWalletPublicKey::new(bip32_path, display);
         let (sw, rev) = try!(self.exchange(command));
         if sw == constants::apdu::ledger::sw::OK {
             message::WalletPublicKey::decode(&rev)
