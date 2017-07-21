@@ -223,7 +223,7 @@ impl EncryptedWallet {
     }
 
     /// Display an address on the Ledger screen and make the user click "confirm"
-    pub fn display<'a, D: Dongle>(&mut self, dongle: &mut D, index: usize) -> Result<(), Error> {
+    pub fn display<'a, D: Dongle>(&self, dongle: &mut D, index: usize) -> Result<(), Error> {
         let path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
         dongle.get_public_key(&path, true)?;
         Ok(())
