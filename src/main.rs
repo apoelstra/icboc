@@ -203,12 +203,16 @@ fn main() {
                     let entry = pretty_unwrap("Searching for entry",
                                               wallet.search(&mut dongle, &args[3]));
                     println!("{}", entry);
+                    pretty_unwrap("Confirming address",
+                                  wallet.display(&mut dongle, entry.index));
                 } else {
                 // Otherwise take the index as an index
                     let index = usize::from_str(&args[3]).expect("Parsing index as number");
                     let entry = pretty_unwrap("Decrypting entry",
                                               wallet.lookup(&mut dongle, index));
                     println!("{}", entry);
+                    pretty_unwrap("Confirming address",
+                                  wallet.display(&mut dongle, entry.index));
                 }
             }
         }
@@ -267,6 +271,8 @@ fn main() {
                 let entry = pretty_unwrap("Updating entry",
                                           wallet.update(&mut dongle, index, name, block, Update::Unused(note)));
                 println!("{}", entry);
+                pretty_unwrap("Confirming address",
+                              wallet.display(&mut dongle, index));
                 println!("Rerandomizing wallet...");
                 pretty_unwrap("Rerandomizing wallet",
                               wallet.rerandomize(&mut dongle));

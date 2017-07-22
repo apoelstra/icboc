@@ -1,6 +1,6 @@
 [root]
 name = "icebox"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitcoin 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
