@@ -28,7 +28,7 @@ use std::cmp;
 use constants::apdu;
 use error::Error;
 use spend;
-use util::{encode_transaction_with_cutpoints, encode_spend_inputs_with_cutpoints, encode_spend_outputs_with_cutpoints};
+use util::{encode_transaction_with_cutpoints, encode_spend_outputs_with_cutpoints, encode_spend_inputs_with_cutpoints_segwit_input, encode_spend_inputs_with_cutpoints_segwit_init};
 
 /// A message that can be received from the dongle
 pub trait Response: Sized {
@@ -561,7 +561,11 @@ impl UntrustedHashTransactionInputStart {
     /// be set if there are multiple inputs to be signed and this is not the
     /// first
     pub fn new(spend: &spend::Spend, index: usize, continuing: bool, apdu_size: usize) -> UntrustedHashTransactionInputStart {
-        let (ser_inputs, cuts) = encode_spend_inputs_with_cutpoints(spend, index, apdu_size);
+        let (ser_inputs, cuts) = if continuing {
+            encode_spend_inputs_with_cutpoints_segwit_input(spend, index, apdu_size)
+        } else {
+            encode_spend_inputs_with_cutpoints_segwit_init(spend, apdu_size)
+        };
         UntrustedHashTransactionInputStart {
             continuing: continuing,
             ser_inputs: ser_inputs,
@@ -578,7 +582,7 @@ impl Command for UntrustedHashTransactionInputStart {
         ret.push(apdu::ledger::BTCHIP_CLA);
         ret.push(apdu::ledger::ins::UNTRUSTED_HASH_TRANSACTION_INPUT_START);
         ret.push(if self.sent_cuts != 0 { 0x80 } else { 0x00 });
-        ret.push(if self.continuing { 0x80 } else { 0x00 });
+        ret.push(if self.continuing { 0x80 } else { 0x02 });
         ret.push(0x00);  // Will overwrite this with final length
 
         // Rest same as for `GetTrustedInput`
@@ -763,7 +767,7 @@ impl Command for UntrustedHashSign {
         }
         ret.push(0x00); // user validation code
         let _ = ret.write_u32::<BigEndian>(self.locktime);
-        ret.push(self.sighash.as_u32() as u8);
+        ret.push(self.sighash.as_u32() as u8 | 0x40);
         Some(ret)
     }
 

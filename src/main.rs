@@ -368,11 +368,13 @@ fn main() {
             };
 
             // Obtain signatures for it
+            pretty_unwrap("initializing segwit tx",
+                          wallet.get_script_sig(&mut dongle, &spend, 0, false)); // initial segwit
             for (n, input) in spend.input.iter().enumerate() {
                 println!("Signing for input {} of {}...", n + 1, spend.input.len());
                 let mut txin = input.txin.clone();
                 txin.script_sig = pretty_unwrap("Signing for input",
-                                                wallet.get_script_sig(&mut dongle, &spend, input.index, n > 0));
+                                                wallet.get_script_sig(&mut dongle, &spend, input.index, true));
                 tx.input.push(txin);
             }
 

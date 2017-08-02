@@ -28,6 +28,8 @@ pub struct Input {
     pub index: usize,
     /// The "trusted input" that encodes the transaction amount to the Ledger
     pub trusted_input: [u8; 56],
+    /// The input amount
+    pub amount: u64,
     /// The scriptpubkey of the txout this input spends
     pub script_pubkey: Script,
     /// The txin for this input, with blank script to be filled in
@@ -43,6 +45,7 @@ impl Input {
         Input {
             index: entry.index,
             trusted_input: trusted_input,
+            amount: entry.amount,
             script_pubkey: entry.address.script_pubkey(),
             txin: TxIn {
                 prev_hash: Sha256dHash::from(&entry.txid[..]),

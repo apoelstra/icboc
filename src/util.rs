@@ -161,7 +161,7 @@ fn encode_marking_cutpoints<'a, T>(data: &T, buf: &'a mut Vec<u8>, cuts: &mut Ve
 
 /// Wrapper around `encode_marking_cutpoint` that encodes a Transaction correctly
 pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Copied structure from rust-bitcoin transaction.rs, with TxIn and TxOut unrolled
@@ -205,10 +205,58 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
     (ret_ser_tx, ret_cuts)
 }
 
+/// Wrapper around `encode_marking_cutpoint` that encodes the inputs of a segwit transaction
+/// during the initial call to `UntrustedHashInputStart`
+pub fn encode_spend_inputs_with_cutpoints_segwit_init(spend: &Spend, max_size: usize) -> (Vec<u8>, Vec<usize>) {
+    let mut ret_ser_tx = vec![];
+    let mut ret_cuts = vec![0];  // mark initial cut at 0
+
+    // Encode version
+    encode_marking_cutpoints(&1u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    // Encode inputs
+    encode_marking_cutpoints(&VarInt(spend.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
+    for input in &spend.input {
+        ret_ser_tx.push(0x02); // segwit input to follow
+        ret_ser_tx.extend(&input.txin.prev_hash[..]);
+        encode_marking_cutpoints(&input.txin.prev_index, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        encode_marking_cutpoints(&input.amount, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        // script/sequence as in normal bitcoin encoding
+        encode_marking_cutpoints(&Script::new(), &mut ret_ser_tx, &mut ret_cuts, max_size);
+        encode_marking_cutpoints(&input.txin.sequence, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    }
+    // Halt here, do not encode number of outputs
+    (ret_ser_tx, ret_cuts)
+}
+
+/// Like above, but for each input, in subsequent calls to `UntrustedHashInputStart`
+pub fn encode_spend_inputs_with_cutpoints_segwit_input(spend: &Spend, index: usize, max_size: usize) -> (Vec<u8>, Vec<usize>) {
+    let mut ret_ser_tx = vec![];
+    let mut ret_cuts = vec![0];  // mark initial cut at 0
+
+    // Encode version
+    encode_marking_cutpoints(&1u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    // Encode inputs
+    encode_marking_cutpoints(&VarInt(1), &mut ret_ser_tx, &mut ret_cuts, max_size);
+    for input in &spend.input {
+        // Only encode the one input
+        if input.index == index {
+            ret_ser_tx.push(0x02); // segwit input to follow
+            ret_ser_tx.extend(&input.txin.prev_hash[..]);
+            encode_marking_cutpoints(&input.txin.prev_index, &mut ret_ser_tx, &mut ret_cuts, max_size);
+            encode_marking_cutpoints(&input.amount, &mut ret_ser_tx, &mut ret_cuts, max_size);
+            // script/sequence as in normal bitcoin encoding
+            encode_marking_cutpoints(&Script::new(), &mut ret_ser_tx, &mut ret_cuts, max_size);
+            encode_marking_cutpoints(&input.txin.sequence, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        }
+    }
+    // Halt here, do not encode number of outputs
+    (ret_ser_tx, ret_cuts)
+}
+
 /// Wrapper around `encode_marking_cutpoint` that encodes a Spend's inputs correctly
 /// No segwit support
 pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // This is quite different from the Bitcoin format as we have to replace some
@@ -234,7 +282,7 @@ pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size:
 
 /// Wrapper around `encode_marking_cutpoint` that encodes a Spend's outputs correctly
 pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Encode outputs
@@ -247,8 +295,4 @@ pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (V
     // Halt here, do not encode number of outputs
     (ret_ser_tx, ret_cuts)
 }
-
-
-
-
 

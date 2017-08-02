@@ -452,7 +452,10 @@ impl EncryptedWallet {
     pub fn get_script_sig<D: Dongle>(&self, dongle: &mut D, spend: &spend::Spend, index: usize, continuing: bool) -> Result<Script, Error> {
         let secp = Secp256k1::with_caps(ContextFlag::None);
         dongle.transaction_input_start(spend, index, continuing)?;
-        dongle.transaction_input_finalize(spend)?;
+        if !continuing {
+            dongle.transaction_input_finalize(spend)?;
+            return Ok(script::Script::new());
+        }
         let signing_pk_path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
         let signing_pk = dongle.get_public_key(&signing_pk_path, false)?;
         let mut vec_sig = dongle.transaction_sign(signing_pk_path, SigHashType::All, 0)?;
