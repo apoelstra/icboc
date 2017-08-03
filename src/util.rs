@@ -212,7 +212,7 @@ pub fn encode_spend_inputs_with_cutpoints_segwit_init(spend: &Spend, max_size: u
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Encode version
-    encode_marking_cutpoints(&1u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    encode_marking_cutpoints(&2u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
     // Encode inputs
     encode_marking_cutpoints(&VarInt(spend.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
     for input in &spend.input {
@@ -234,7 +234,7 @@ pub fn encode_spend_inputs_with_cutpoints_segwit_input(spend: &Spend, index: usi
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Encode version
-    encode_marking_cutpoints(&1u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
+    encode_marking_cutpoints(&2u32, &mut ret_ser_tx, &mut ret_cuts, max_size);
     // Encode inputs
     encode_marking_cutpoints(&VarInt(1), &mut ret_ser_tx, &mut ret_cuts, max_size);
     for input in &spend.input {
@@ -245,7 +245,7 @@ pub fn encode_spend_inputs_with_cutpoints_segwit_input(spend: &Spend, index: usi
             encode_marking_cutpoints(&input.txin.prev_index, &mut ret_ser_tx, &mut ret_cuts, max_size);
             encode_marking_cutpoints(&input.amount, &mut ret_ser_tx, &mut ret_cuts, max_size);
             // script/sequence as in normal bitcoin encoding
-            encode_marking_cutpoints(&Script::new(), &mut ret_ser_tx, &mut ret_cuts, max_size);
+            encode_marking_cutpoints(&input.script_pubkey, &mut ret_ser_tx, &mut ret_cuts, max_size);
             encode_marking_cutpoints(&input.txin.sequence, &mut ret_ser_tx, &mut ret_cuts, max_size);
         }
     }

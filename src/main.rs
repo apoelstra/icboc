@@ -360,7 +360,7 @@ fn main() {
 
             // Build transaction
             let mut tx = Transaction {
-                version: 1,
+                version: 2,
                 lock_time: 0,
                 input: Vec::with_capacity(spend.input.len()),
                 output: spend.output.clone(),
