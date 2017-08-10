@@ -40,7 +40,7 @@ use icebox::dongle::Dongle;
 use icebox::error::Error;
 use icebox::constants::apdu::ledger::sw;
 use icebox::spend::Spend;
-use icebox::wallet::Update;
+use icebox::wallet::{EntryState, Update};
 use icebox::util::convert_compact_to_signmessage_rpc;
 
 /// Prompt the user for some string data
@@ -203,16 +203,20 @@ fn main() {
                     let entry = pretty_unwrap("Searching for entry",
                                               wallet.search(&mut dongle, &args[3]));
                     println!("{}", entry);
-                    pretty_unwrap("Confirming address",
-                                  wallet.display(&mut dongle, entry.index));
+                    if entry.state == EntryState::Valid {
+                        pretty_unwrap("Confirming address",
+                                      wallet.display(&mut dongle, entry.index));
+                    }
                 } else {
                 // Otherwise take the index as an index
                     let index = usize::from_str(&args[3]).expect("Parsing index as number");
                     let entry = pretty_unwrap("Decrypting entry",
                                               wallet.lookup(&mut dongle, index));
                     println!("{}", entry);
-                    pretty_unwrap("Confirming address",
-                                  wallet.display(&mut dongle, entry.index));
+                    if entry.state == EntryState::Valid {
+                        pretty_unwrap("Confirming address",
+                                      wallet.display(&mut dongle, entry.index));
+                    }
                 }
             }
         }
