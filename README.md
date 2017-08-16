@@ -107,6 +107,7 @@ fork the Bitcoin app to add some extra functionality.
 
  - [ ] Do decryption/encryption on the dongle rather than querying for encryption keys
  - [ ] Commit to data in the address itself via pay-to-contract rather than just signing it
+ - [ ] Use sign-to-contract to support [Greg's sidechannel-blocking nonce choosing scheme](https://botbot.me/freenode/secp256k1/2017-08-12/?msg=89759015&page=1)
  - [ ] Detect and warn when a wallet has been restored from an out-of-date backup
  - [ ] Faster lookup of next-unused-index
 
