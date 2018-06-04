@@ -166,12 +166,6 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
 
     // Copied structure from rust-bitcoin transaction.rs, with TxIn and TxOut unrolled
     encode_marking_cutpoints(&tx.version, &mut ret_ser_tx, &mut ret_cuts, max_size);
-    // Encode segwit magic
-    if !tx.witness.is_empty() {
-        encode_marking_cutpoints(&0u8, &mut ret_ser_tx, &mut ret_cuts, max_size);
-        encode_marking_cutpoints(&1u8, &mut ret_ser_tx, &mut ret_cuts, max_size);
-    }
-    // Encode inputs
     encode_marking_cutpoints(&VarInt(tx.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
     for input in &tx.input {
         encode_marking_cutpoints(&input.prev_hash, &mut ret_ser_tx, &mut ret_cuts, max_size);
@@ -188,17 +182,7 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
         ret_cuts.pop();  // Cut between value and script_pubkey disallowed
         encode_marking_cutpoints(&output.script_pubkey, &mut ret_ser_tx, &mut ret_cuts, max_size);
     }
-    // Encode witnesses
-    if !tx.witness.is_empty() {
-        encode_marking_cutpoints(&VarInt(tx.witness.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
-        for witness in &tx.witness {
-            // Encode the individual components of the witnesses
-            encode_marking_cutpoints(&VarInt(witness.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
-            for component in witness {
-                encode_marking_cutpoints(component, &mut ret_ser_tx, &mut ret_cuts, max_size);
-            }
-        }
-    }
+    // Do not encode witnesses; these are not used when sending transactions to the Ledger
     // Finish
     encode_marking_cutpoints(&tx.lock_time, &mut ret_ser_tx, &mut ret_cuts, max_size);
 
