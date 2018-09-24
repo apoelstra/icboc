@@ -15,7 +15,7 @@
 //! # Error Handling
 
 use std::{error, fmt, io, string};
-use bitcoin::util::base58;
+use bitcoin::network::serialize;
 use hid;
 use secp256k1;
 
@@ -23,7 +23,7 @@ use secp256k1;
 #[derive(Debug)]
 pub enum Error {
     /// Error in Base58 decoding
-    Base58(base58::Error),
+    Base58(serialize::Error),
     /// Error from hidapi
     Hid(hid::Error),
     /// std io error
@@ -72,8 +72,8 @@ pub enum Error {
     UnexpectedEof
 }
 
-impl From<base58::Error> for Error {
-    fn from(e: base58::Error) -> Error {
+impl From<serialize::Error> for Error {
+    fn from(e: serialize::Error) -> Error {
         Error::Base58(e)
     }
 }

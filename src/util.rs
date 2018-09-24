@@ -15,14 +15,12 @@
 //! # Miscellaneous Functions
 
 use base64;
-use bitcoin::blockdata::transaction::Transaction;
-use bitcoin::blockdata::script::Script;
-use bitcoin::network::encodable::{ConsensusEncodable, VarInt};
+use bitcoin::{Transaction, Script, VarInt};
+use bitcoin::network::encodable::ConsensusEncodable;
 use bitcoin::network::serialize::RawEncoder;
 use crypto::digest::Digest;
 use crypto::sha2;
-use secp256k1::{Secp256k1, ContextFlag, Signature};
-use secp256k1::key::SecretKey;
+use secp256k1::{Secp256k1, Signature, SecretKey};
 
 use spend::Spend;
 use error::Error;
@@ -86,7 +84,7 @@ pub fn convert_ledger_der_to_compact(sig: &[u8]) -> Result<[u8; 64], Error> {
         assert_eq!(r_len, 33);  // the early return up top ensures this
         // Otherwise there is a nonzero bit in front of r. We have to negate s
         // to make this bit zero, then we can pretend it doesn't exist
-        let secp = Secp256k1::with_caps(ContextFlag::None);
+        let secp = Secp256k1::without_caps();
 
         let neg_one = SecretKey::from_slice(&secp, &NEG_ONE).unwrap();
         let mut s_arr = [0; 32];
@@ -102,7 +100,7 @@ pub fn convert_ledger_der_to_compact(sig: &[u8]) -> Result<[u8; 64], Error> {
 
 /// Expands a compact-encoded sig into one that can be verified by libsecp
 pub fn convert_compact_to_secp(sig: &[u8]) -> Result<Signature, Error> {
-    let secp = Secp256k1::with_caps(ContextFlag::None);
+    let secp = Secp256k1::without_caps();
     let mut rv = [0; 70];
     rv[0] = 0x30; // Sequence
     rv[1] = 0x44; // length of remainder
@@ -168,9 +166,9 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
     encode_marking_cutpoints(&tx.version, &mut ret_ser_tx, &mut ret_cuts, max_size);
     encode_marking_cutpoints(&VarInt(tx.input.len() as u64), &mut ret_ser_tx, &mut ret_cuts, max_size);
     for input in &tx.input {
-        encode_marking_cutpoints(&input.prev_hash, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        encode_marking_cutpoints(&input.previous_output.txid, &mut ret_ser_tx, &mut ret_cuts, max_size);
         ret_cuts.pop();  // Cut between txid and vout disallowed
-        encode_marking_cutpoints(&input.prev_index, &mut ret_ser_tx, &mut ret_cuts, max_size);
+        encode_marking_cutpoints(&input.previous_output.vout, &mut ret_ser_tx, &mut ret_cuts, max_size);
         ret_cuts.pop();  // Ditto between vout and script_sig length
         encode_marking_cutpoints(&input.script_sig, &mut ret_ser_tx, &mut ret_cuts, max_size);
         encode_marking_cutpoints(&input.sequence, &mut ret_ser_tx, &mut ret_cuts, max_size);

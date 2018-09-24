@@ -18,10 +18,10 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
-use bitcoin::blockdata::transaction::{Transaction, SigHashType};
+use bitcoin::{Transaction, SigHashType};
 use bitcoin::network::constants::Network;
 use byteorder::{WriteBytesExt, BigEndian};
-use secp256k1::{Secp256k1, ContextFlag};
+use secp256k1::Secp256k1;
 use secp256k1::key::PublicKey;
 use std::cmp;
 
@@ -234,7 +234,7 @@ pub struct WalletPublicKey {
 
 impl Response for WalletPublicKey {
     fn decode(data: &[u8]) -> Result<WalletPublicKey, Error> {
-        let secp = Secp256k1::with_caps(ContextFlag::None);
+        let secp = Secp256k1::without_caps();
 
         let pk_len = data[0] as usize;
         if 2 + pk_len > data.len() {
@@ -804,7 +804,7 @@ impl SetAlternateCoinVersions {
                     script_version: 5
                 }
             }
-            Network::Testnet => {
+            Network::Testnet | Network::Regtest => {
                 SetAlternateCoinVersions {
                     sent: false,
                     sw: 0,

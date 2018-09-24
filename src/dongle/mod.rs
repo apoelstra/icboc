@@ -17,7 +17,7 @@
 //! Abstract API for communicating with the device
 //!
 
-use bitcoin::blockdata::transaction::{Transaction, SigHashType};
+use bitcoin::{Transaction, SigHashType};
 use bitcoin::network::constants::Network;
 
 use constants;
