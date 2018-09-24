@@ -16,8 +16,7 @@
 //!
 //! Utilities for creating spending transactions
 
-use bitcoin::blockdata::transaction::{TxIn, TxOut};
-use bitcoin::blockdata::script::Script;
+use bitcoin::{OutPoint, Script, TxIn, TxOut};
 use bitcoin::util::hash::Sha256dHash;
 
 use wallet::Entry;
@@ -45,10 +44,13 @@ impl Input {
             trusted_input: trusted_input,
             script_pubkey: entry.address.script_pubkey(),
             txin: TxIn {
-                prev_hash: Sha256dHash::from(&entry.txid[..]),
-                prev_index: entry.vout,
+                previous_output: OutPoint {
+                    txid: Sha256dHash::from(&entry.txid[..]),
+                    vout: entry.vout,
+                },
                 script_sig: Script::new(),
-                sequence: 0xfffffffe
+                sequence: 0xfffffffe,
+                witness: vec![],
             }
         }
     }
