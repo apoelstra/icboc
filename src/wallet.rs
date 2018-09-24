@@ -20,6 +20,7 @@
 use bitcoin::{Address, Script, Transaction, TxOut, SigHashType};
 use bitcoin::blockdata::script;
 use bitcoin::network::constants::Network;
+use bitcoin::util::hash::Sha256dHash;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt, BigEndian};
 use crypto::aes;
 use hex::ToHex;
@@ -229,7 +230,7 @@ impl EncryptedWallet {
     }
 
     /// Update an address entry to indicate that it is in use
-    pub fn update<'a, D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Vec<u8>, data: Update<'a>) -> Result<Entry, Error> {
+    pub fn update<'a, D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Sha256dHash, data: Update<'a>) -> Result<Entry, Error> {
         if user.as_bytes().len() > MAX_USER_ID_BYTES {
             return Err(Error::UserIdTooLong(user.as_bytes().len(), MAX_USER_ID_BYTES));
         }
@@ -239,7 +240,7 @@ impl EncryptedWallet {
         let mut timesl = [0; 24];
         timesl.clone_from_slice(timestr.as_bytes());
         let mut block = [0; 32];
-        block.clone_from_slice(&blockhash);
+        block.clone_from_slice(&blockhash[..]);
 
         let path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
         let key = dongle.get_public_key(&path, false)?;
@@ -652,16 +653,15 @@ impl fmt::Display for Entry {
         if self.state != EntryState::Received {
             writeln!(f, "    txid: no associated output")?;
         } else {
-            let mut txid = [0; 32];
-            txid.copy_from_slice(&self.txid[..]);
-            txid.reverse();  // lol bitcoin
-            writeln!(f, "    txid: {}", txid.to_hex())?;
+            let txid = Sha256dHash::from(&self.txid[..]);
+            writeln!(f, "    txid: {}", txid)?;
             writeln!(f, "    vout: {}", self.vout)?;
             writeln!(f, "  amount: {}", self.amount)?;
             writeln!(f, "   spent: {}", self.spent)?;
         }
         writeln!(f, " created: {}", str::from_utf8(&self.date[..]).unwrap())?;
-        writeln!(f, " (after): {}", self.blockhash.to_hex())?;
+        let blockhash = Sha256dHash::from(&self.blockhash[..]);
+        writeln!(f, " (after): {}", blockhash)?;
         writeln!(f, "    user: {}", self.user)?;
         write!(f, "    note: {}", self.note)?;
         Ok(())

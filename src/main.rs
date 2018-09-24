@@ -30,6 +30,7 @@ use bitcoin::{Address, Transaction, TxOut};
 use bitcoin::network::constants::Network;
 use bitcoin::network::serialize::serialize_hex as bitcoin_serialize_hex;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
+use bitcoin::util::hash::Sha256dHash;
 use std::{env, io, fs, process};
 use std::io::{Write, BufRead};
 use std::str::FromStr;
@@ -263,11 +264,7 @@ fn main() {
             if entry.state == icebox::wallet::EntryState::Unused {
                 let name = user_prompt("Your name");
                 let block_str = user_prompt("Recent blockhash (pick one say, 20 blocks ago, that is unlikely to be reorged out)");
-                let block: Vec<u8> = hex::FromHex::from_hex(block_str.as_bytes()).expect("decoding blockhash hex");
-                if block.len() != 32 {
-                    println!("A blockhash must be 32 bytes (64 hex characters)");
-                    process::exit(1);
-                }
+                let block = Sha256dHash::from_hex(&block_str).expect("decoding blockhash hex");
                 let note = user_prompt("Note to tag address with");
 
                 let entry = pretty_unwrap("Updating entry",
@@ -388,7 +385,7 @@ fn main() {
                 println!("Recording change output as used. We need a bit of information.");
                 let name = user_prompt("Your name");
                 let block_str = user_prompt("Recent blockhash (pick one say, 20 blocks ago, that is unlikely to be reorged out)");
-                let block: Vec<u8> = hex::FromHex::from_hex(block_str.as_bytes()).expect("decoding blockhash hex");
+                let block = Sha256dHash::from_hex(&block_str).expect("decoding blockhash hex");
                 if block.len() != 32 {
                     println!("A blockhash must be 32 bytes (64 hex characters)");
                     process::exit(1);
