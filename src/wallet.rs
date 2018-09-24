@@ -17,7 +17,7 @@
 //! Support for the "wallet" which is really more of an audit log
 //!
 
-use bitcoin::{Address, BitcoinHash, Script, Transaction, TxOut, SigHashType};
+use bitcoin::{Address, Script, Transaction, TxOut, SigHashType};
 use bitcoin::blockdata::script;
 use bitcoin::network::constants::Network;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt, BigEndian};
@@ -261,9 +261,9 @@ impl EncryptedWallet {
                 amount = 0;
             }
             Update::Change(tx, vout_) => {
-                let hash = tx.bitcoin_hash();
+                let hash = tx.txid();
                 state = EntryState::Received;
-                note = format!("change of {:x}", hash);
+                note = format!("change of {}", hash);
                 let trusted_input_ = dongle.get_trusted_input(tx, vout_)?;
                 trusted_input.copy_from_slice(&trusted_input_[..]);
                 txid.copy_from_slice(&hash[..]);
@@ -307,7 +307,7 @@ impl EncryptedWallet {
     /// Process a transaction which claims to send coins to this wallet,
     /// finding all output which send coins to us
     pub fn receive<D: Dongle>(&mut self, dongle: &mut D, tx: &Transaction) -> Result<(), Error> {
-        let txid = tx.bitcoin_hash();
+        let txid = tx.txid();
 
         for i in 0..self.entries.len() {
             let mut entry = self.lookup(dongle, i)?;
