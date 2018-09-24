@@ -11,7 +11,7 @@ name = "icboc"
 path = "src/main.rs"
 
 [dependencies]
-base64 = "0.5"
+base64 = "0.9"
 bitcoin = "0.14"
 byteorder = "1.0"
 rust-crypto = "0.2"
