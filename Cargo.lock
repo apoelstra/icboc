@@ -83,7 +83,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "hid"
-version = "0.3.1"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "hidapi-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -108,7 +108,7 @@ dependencies = [
  "bitcoin 0.14.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hid 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hid 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
  "secp256k1 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -275,7 +275,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)" = "5e33ec290da0d127825013597dbdfc28bee4964690c7ce1166cbc2a7bd08b1bb"
 "checksum hex 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d6a22814455d41612f41161581c2883c0c6a1c41852729b17d5ed88f01e153aa"
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
-"checksum hid 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "74ec4bb2e3f01d3838ea2bbbe3919d98f921c7aeed14a5491df89ac3dc4839f9"
+"checksum hid 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "526208586d017ea587be6f1c65f6d5491a60d15a6667da110ad2520662a265cb"
 "checksum hidapi-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "dd8a9410aec7ca9f4571ff40c7b1813a28503c2a664a028921fc973073dcd4bf"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)" = "76e3a3ef172f1a0b9a9ff0dd1491ae5e6c948b94479a3021819ba7d860c8645d"
