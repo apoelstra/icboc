@@ -72,16 +72,15 @@ pub fn get_unique() -> Result<HardDongle, Error> {
     let mut found_count = 0;
     let mut found_dev = None;
     for hid_dev in hid.devices() {
-        match (hid_dev.product_id(), hid_dev.vendor_id()) {
-            (constants::hid::nano_s::PRODUCT_ID,
-             constants::hid::nano_s::VENDOR_ID) => {
-                 found_count += 1;
-                 // Note that this `hid_dev.open()` will be closed when the object is
-                 // dropped, i.e. if it is overwritten or if the user destroyes the
-                 // returned `HardDongle` object
-                 found_dev = Some(try!(hid_dev.open()));
-            }
-            _ => {}
+        if hid_dev.product_id() == constants::hid::nano_s::PRODUCT_ID
+            && hid_dev.vendor_id() == constants::hid::nano_s::VENDOR_ID
+            && (hid_dev.interface_number() == 0 || hid_dev.usage_page() == 0xffa0)
+        {
+             found_count += 1;
+             // Note that this `hid_dev.open()` will be closed when the object is
+             // dropped, i.e. if it is overwritten or if the user destroyes the
+             // returned `HardDongle` object
+             found_dev = Some(try!(hid_dev.open()));
         }
     }
 
