@@ -18,10 +18,10 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
-use bitcoin::blockdata::transaction::{Transaction, SigHashType};
+use bitcoin::{Transaction, SigHashType};
 use bitcoin::network::constants::Network;
 use byteorder::{WriteBytesExt, BigEndian};
-use secp256k1::{Secp256k1, ContextFlag};
+use secp256k1::Secp256k1;
 use secp256k1::key::PublicKey;
 use std::cmp;
 
@@ -234,19 +234,19 @@ pub struct WalletPublicKey {
 
 impl Response for WalletPublicKey {
     fn decode(data: &[u8]) -> Result<WalletPublicKey, Error> {
-        let secp = Secp256k1::with_caps(ContextFlag::None);
+        let secp = Secp256k1::without_caps();
 
         let pk_len = data[0] as usize;
         if 2 + pk_len > data.len() {
             return Err(Error::UnexpectedEof);
         }
-        let pk = try!(PublicKey::from_slice(&secp, &data[1..1+pk_len]));
+        let pk = PublicKey::from_slice(&secp, &data[1..1+pk_len])?;
 
         let addr_len = data[1 + pk_len] as usize;
         if 2 + pk_len + addr_len + 32 != data.len() {
             return Err(Error::ResponseWrongLength(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY, data.len()));
         }
-        let addr = try!(String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned()));
+        let addr = String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned())?;
 
         let mut ret = WalletPublicKey {
             public_key: pk,
@@ -804,7 +804,7 @@ impl SetAlternateCoinVersions {
                     script_version: 5
                 }
             }
-            Network::Testnet => {
+            Network::Testnet | Network::Regtest => {
                 SetAlternateCoinVersions {
                     sent: false,
                     sw: 0,

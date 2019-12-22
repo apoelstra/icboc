@@ -26,12 +26,11 @@ extern crate hex;
 extern crate icebox;
 extern crate simplelog;
 
-use bitcoin::blockdata::transaction::{Transaction, TxOut};
+use bitcoin::{Address, Transaction, TxOut};
 use bitcoin::network::constants::Network;
 use bitcoin::network::serialize::serialize_hex as bitcoin_serialize_hex;
 use bitcoin::network::serialize::deserialize as bitcoin_deserialize;
-use bitcoin::util::address::Address;
-use bitcoin::util::base58::{ToBase58, FromBase58};
+use bitcoin::util::hash::Sha256dHash;
 use std::{env, io, fs, process};
 use std::io::{Write, BufRead};
 use std::str::FromStr;
@@ -239,7 +238,7 @@ fn main() {
             };
             let sig = pretty_unwrap("Getting signature", entry.sign_message(&mut dongle, &args[4]));
             let sig64 = pretty_unwrap("Encoding sig as base64", convert_compact_to_signmessage_rpc(&sig[..]));
-            println!("{}", entry.address.to_base58check());
+            println!("{}", entry.address);
             println!("{}", sig64);
         }
         // Update a new unused address slot
@@ -265,11 +264,7 @@ fn main() {
             if entry.state == icebox::wallet::EntryState::Unused {
                 let name = user_prompt("Your name");
                 let block_str = user_prompt("Recent blockhash (pick one say, 20 blocks ago, that is unlikely to be reorged out)");
-                let block: Vec<u8> = hex::FromHex::from_hex(block_str.as_bytes()).expect("decoding blockhash hex");
-                if block.len() != 32 {
-                    println!("A blockhash must be 32 bytes (64 hex characters)");
-                    process::exit(1);
-                }
+                let block = Sha256dHash::from_hex(&block_str).expect("decoding blockhash hex");
                 let note = user_prompt("Note to tag address with");
 
                 let entry = pretty_unwrap("Updating entry",
@@ -351,7 +346,7 @@ fn main() {
                 if i % 2 == 1 {
                     continue;
                 }
-                let addr = Address::from_base58check(&args[i]).expect("Decoding address");
+                let addr = Address::from_str(&args[i]).expect("Decoding address");
                 let amount = u64::from_str(&args[i + 1]).expect("Parsing amount as number");
                 spend.output.push(TxOut {
                     value: amount,
@@ -368,7 +363,6 @@ fn main() {
                 lock_time: 0,
                 input: Vec::with_capacity(spend.input.len()),
                 output: spend.output.clone(),
-                witness: vec![]
             };
 
             // Obtain signatures for it
@@ -391,7 +385,7 @@ fn main() {
                 println!("Recording change output as used. We need a bit of information.");
                 let name = user_prompt("Your name");
                 let block_str = user_prompt("Recent blockhash (pick one say, 20 blocks ago, that is unlikely to be reorged out)");
-                let block: Vec<u8> = hex::FromHex::from_hex(block_str.as_bytes()).expect("decoding blockhash hex");
+                let block = Sha256dHash::from_hex(&block_str).expect("decoding blockhash hex");
                 if block.len() != 32 {
                     println!("A blockhash must be 32 bytes (64 hex characters)");
                     process::exit(1);

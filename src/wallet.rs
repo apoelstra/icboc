@@ -17,17 +17,16 @@
 //! Support for the "wallet" which is really more of an audit log
 //!
 
-use bitcoin::blockdata::transaction::{Transaction, TxOut, SigHashType};
-use bitcoin::blockdata::script::{self, Script};
+use bitcoin::{Address, Script, Transaction, TxOut, SigHashType};
+use bitcoin::blockdata::script;
 use bitcoin::network::constants::Network;
-use bitcoin::network::serialize::BitcoinHash;
-use bitcoin::util::address::Address;
-use bitcoin::util::base58::{FromBase58, ToBase58};
+use bitcoin::util::hash::Sha256dHash;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt, BigEndian};
 use crypto::aes;
 use hex::ToHex;
-use secp256k1::{self, Secp256k1, ContextFlag};
+use secp256k1::{self, Secp256k1};
 use std::{fmt, io, fs, str};
+use std::str::FromStr;
 use std::io::{Read, Write};
 use time;
 
@@ -60,6 +59,7 @@ pub fn bip32_path(network: Network, account: u32, purpose: KeyPurpose, index: u3
     let coin_type = match network {
         Network::Bitcoin => 0x80000000,
         Network::Testnet => 0x80000001,
+        Network::Regtest => 0x80000001,
     };
     [0x8000002c, coin_type, 0x80000000 | account, 0x80000000 | pp_index, 0x80000000 | index]
 }
@@ -230,7 +230,7 @@ impl EncryptedWallet {
     }
 
     /// Update an address entry to indicate that it is in use
-    pub fn update<'a, D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Vec<u8>, data: Update<'a>) -> Result<Entry, Error> {
+    pub fn update<'a, D: Dongle>(&mut self, dongle: &mut D, index: usize, user: String, blockhash: Sha256dHash, data: Update<'a>) -> Result<Entry, Error> {
         if user.as_bytes().len() > MAX_USER_ID_BYTES {
             return Err(Error::UserIdTooLong(user.as_bytes().len(), MAX_USER_ID_BYTES));
         }
@@ -240,7 +240,7 @@ impl EncryptedWallet {
         let mut timesl = [0; 24];
         timesl.clone_from_slice(timestr.as_bytes());
         let mut block = [0; 32];
-        block.clone_from_slice(&blockhash);
+        block.clone_from_slice(&blockhash[..]);
 
         let path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
         let key = dongle.get_public_key(&path, false)?;
@@ -262,9 +262,9 @@ impl EncryptedWallet {
                 amount = 0;
             }
             Update::Change(tx, vout_) => {
-                let hash = tx.bitcoin_hash();
+                let hash = tx.txid();
                 state = EntryState::Received;
-                note = format!("change of {:x}", hash);
+                note = format!("change of {}", hash);
                 let trusted_input_ = dongle.get_trusted_input(tx, vout_)?;
                 trusted_input.copy_from_slice(&trusted_input_[..]);
                 txid.copy_from_slice(&hash[..]);
@@ -277,7 +277,7 @@ impl EncryptedWallet {
             bip32_path: path,
             spent: false,
             trusted_input: trusted_input,
-            address: FromBase58::from_base58check(&key.b58_address)?,
+            address: Address::from_str(&key.b58_address)?,
             index: index,
             txid: txid,
             vout: vout,
@@ -308,7 +308,7 @@ impl EncryptedWallet {
     /// Process a transaction which claims to send coins to this wallet,
     /// finding all output which send coins to us
     pub fn receive<D: Dongle>(&mut self, dongle: &mut D, tx: &Transaction) -> Result<(), Error> {
-        let txid = tx.bitcoin_hash();
+        let txid = tx.txid();
 
         for i in 0..self.entries.len() {
             let mut entry = self.lookup(dongle, i)?;
@@ -450,7 +450,6 @@ impl EncryptedWallet {
 
     /// Obtain a scriptsig from the dongle for a specific input in a spending transaction
     pub fn get_script_sig<D: Dongle>(&self, dongle: &mut D, spend: &spend::Spend, index: usize, continuing: bool) -> Result<Script, Error> {
-        let secp = Secp256k1::with_caps(ContextFlag::None);
         dongle.transaction_input_start(spend, index, continuing)?;
         dongle.transaction_input_finalize(spend)?;
         let signing_pk_path = bip32_path(self.network, self.account, KeyPurpose::Address, index as u32);
@@ -458,7 +457,7 @@ impl EncryptedWallet {
         let mut vec_sig = dongle.transaction_sign(signing_pk_path, SigHashType::All, 0)?;
         vec_sig[0] = 0x30;
         Ok(script::Builder::new().push_slice(&vec_sig[..])
-                                 .push_slice(&signing_pk.public_key.serialize_vec(&secp, true))
+                                 .push_slice(&signing_pk.public_key.serialize())
                                  .into_script())
     }
 
@@ -574,7 +573,7 @@ impl Entry {
                 bip32_path: path,
                 spent: false,
                 trusted_input: [0; 56],
-                address: FromBase58::from_base58check(&key.b58_address)?,
+                address: Address::from_str(&key.b58_address)?,
                 index: index,
                 txid: [0; 32],
                 vout: 0,
@@ -585,7 +584,7 @@ impl Entry {
                 note: String::new()
             })
         } else {
-            let secp = Secp256k1::with_caps(ContextFlag::VerifyOnly);
+            let secp = Secp256k1::verification_only();
             let sig = convert_compact_to_secp(&data[0..64])?;
             let mut msg_full = vec![0; 300];
             // nb the x18 here is the length of "Bitcoin Signed Message:\n", the xfdx00x01 is the length of the rest
@@ -616,7 +615,7 @@ impl Entry {
                 bip32_path: path,
                 spent: BigEndian::read_u32(&data[332..336]) == 1,
                 trusted_input: trusted_input,
-                address: FromBase58::from_base58check(&key.b58_address)?,
+                address: Address::from_str(&key.b58_address)?,
                 index: index,
                 txid: txid,
                 vout: BigEndian::read_u32(&data[152..156]),
@@ -650,20 +649,19 @@ impl fmt::Display for Entry {
             EntryState::Received => writeln!(f, "Signed Entry (used):")?
         }
         writeln!(f, "   index: {}", self.index)?;
-        writeln!(f, " address: {}", self.address.to_base58check())?;
+        writeln!(f, " address: {}", self.address)?;
         if self.state != EntryState::Received {
             writeln!(f, "    txid: no associated output")?;
         } else {
-            let mut txid = [0; 32];
-            txid.copy_from_slice(&self.txid[..]);
-            txid.reverse();  // lol bitcoin
-            writeln!(f, "    txid: {}", txid.to_hex())?;
+            let txid = Sha256dHash::from(&self.txid[..]);
+            writeln!(f, "    txid: {}", txid)?;
             writeln!(f, "    vout: {}", self.vout)?;
             writeln!(f, "  amount: {}", self.amount)?;
             writeln!(f, "   spent: {}", self.spent)?;
         }
         writeln!(f, " created: {}", str::from_utf8(&self.date[..]).unwrap())?;
-        writeln!(f, " (after): {}", self.blockhash.to_hex())?;
+        let blockhash = Sha256dHash::from(&self.blockhash[..]);
+        writeln!(f, " (after): {}", blockhash)?;
         writeln!(f, "    user: {}", self.user)?;
         write!(f, "    note: {}", self.note)?;
         Ok(())
