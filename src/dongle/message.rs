@@ -240,13 +240,13 @@ impl Response for WalletPublicKey {
         if 2 + pk_len > data.len() {
             return Err(Error::UnexpectedEof);
         }
-        let pk = try!(PublicKey::from_slice(&secp, &data[1..1+pk_len]));
+        let pk = PublicKey::from_slice(&secp, &data[1..1+pk_len])?;
 
         let addr_len = data[1 + pk_len] as usize;
         if 2 + pk_len + addr_len + 32 != data.len() {
             return Err(Error::ResponseWrongLength(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY, data.len()));
         }
-        let addr = try!(String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned()));
+        let addr = String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned())?;
 
         let mut ret = WalletPublicKey {
             public_key: pk,

@@ -67,7 +67,7 @@ impl Dongle for HardDongle {
 /// Function to get a handle of the device. Errors out if the device
 /// cannot be accessed or if there are more than one potential devices.
 pub fn get_unique() -> Result<HardDongle, Error> {
-    let hid = try!(hid::init());
+    let hid = hid::init()?;
 
     let mut found_count = 0;
     let mut found_dev = None;
@@ -80,7 +80,7 @@ pub fn get_unique() -> Result<HardDongle, Error> {
              // Note that this `hid_dev.open()` will be closed when the object is
              // dropped, i.e. if it is overwritten or if the user destroyes the
              // returned `HardDongle` object
-             found_dev = Some(try!(hid_dev.open()));
+             found_dev = Some(hid_dev.open()?);
         }
     }
 
@@ -130,10 +130,9 @@ fn write_apdu(handle: &mut hid::Handle, mut data: &[u8]) -> Result<(), Error> {
             data_frame[header_len..header_len + data.len()].clone_from_slice(data);
             data = &data[data.len()..];
         }
-        try!(w.write(&data_frame[..]));
+        w.write(&data_frame[..])?;
 
         if log_enabled!(LogLevel::Debug) {
-            use hex::ToHex;
             trace!("Sending dataframe {}", (&data_frame[..]).to_hex());
         }
 
@@ -152,7 +151,7 @@ fn read_apdu(handle: &mut hid::Handle, timeout: Duration) -> Result<Vec<u8>, Err
     while receive_len > 0 {
         // Read next frame
         let mut data_frame = [0u8; constants::apdu::ledger::PACKET_SIZE];
-        let read_n = try!(r.read(&mut data_frame[..], timeout));
+        let read_n = r.read(&mut data_frame[..], timeout)?;
         if read_n.is_none() {
             return Err(Error::UnexpectedEof);
         }

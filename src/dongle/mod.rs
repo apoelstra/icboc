@@ -41,7 +41,7 @@ pub trait Dongle {
     /// Queries the device for its firmware version
     fn get_firmware_version(&mut self) -> Result<message::FirmwareVersion, Error> {
         let command = message::GetFirmwareVersion::new();
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             message::FirmwareVersion::decode(&rev)
         } else {
@@ -52,7 +52,7 @@ pub trait Dongle {
     /// Queries the device for a BIP32 extended pubkey
     fn get_public_key(&mut self, bip32_path: &[u32], display: bool) -> Result<message::WalletPublicKey, Error> {
         let command = message::GetWalletPublicKey::new(bip32_path, display);
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             message::WalletPublicKey::decode(&rev)
         } else {
@@ -63,7 +63,7 @@ pub trait Dongle {
     /// Query the device to sign an arbitrary message
     fn sign_message(&mut self, message: &[u8], bip32_path: &[u32]) -> Result<[u8; 64], Error> {
         let command = message::SignMessagePrepare::new(bip32_path, message);
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if sw != constants::apdu::ledger::sw::OK {
             return Err(Error::ApduBadStatus(sw));
         }
@@ -73,7 +73,7 @@ pub trait Dongle {
         }
 
         let command = message::SignMessageSign::new();
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             convert_ledger_der_to_compact(&rev)
         } else {
@@ -84,7 +84,7 @@ pub trait Dongle {
     /// Query the device for up to 255 random bytes
     fn get_random(&mut self, n: u8) -> Result<Vec<u8>, Error> {
         let command = message::GetRandom::new(n);
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             Ok(rev)
         } else {
@@ -95,7 +95,7 @@ pub trait Dongle {
     /// Query the device for a trusted input
     fn get_trusted_input(&mut self, tx: &Transaction, vout: u32) -> Result<Vec<u8>, Error> {
         let command = message::GetTrustedInput::new(tx, vout, constants::apdu::ledger::MAX_APDU_SIZE);
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if rev.len() != 56 {
             return Err(Error::ResponseWrongLength(constants::apdu::ledger::ins::GET_TRUSTED_INPUT, rev.len()));
         }
@@ -109,7 +109,7 @@ pub trait Dongle {
     /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
     fn transaction_input_start(&mut self, spend: &Spend, index: usize, continuing: bool) -> Result<(), Error> {
         let command = message::UntrustedHashTransactionInputStart::new(spend, index, continuing, constants::apdu::ledger::MAX_APDU_SIZE);
-        let (sw, _) = try!(self.exchange(command));
+        let (sw, _) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             Ok(())
         } else {
@@ -120,7 +120,7 @@ pub trait Dongle {
     /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL` command
     fn transaction_input_finalize(&mut self, spend: &Spend) -> Result<(), Error> {
         let command = message::UntrustedHashTransactionInputFinalize::new(spend, constants::apdu::ledger::MAX_APDU_SIZE);
-        let (sw, _) = try!(self.exchange(command));
+        let (sw, _) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             Ok(())
         } else {
@@ -131,7 +131,7 @@ pub trait Dongle {
     /// Sends the device a `UNTRUSTED HASH SIGN` command
     fn transaction_sign(&mut self, bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> Result<Vec<u8>, Error> {
         let command = message::UntrustedHashSign::new(bip32_path, sighash, locktime);
-        let (sw, rev) = try!(self.exchange(command));
+        let (sw, rev) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             Ok(rev)
         } else {
@@ -142,7 +142,7 @@ pub trait Dongle {
     /// Sends the device a `SET ALTERNATE COIN VERSIONS` command
     fn set_network(&mut self, network: Network) -> Result<(), Error> {
         let command = message::SetAlternateCoinVersions::new(network);
-        let (sw, _) = try!(self.exchange(command));
+        let (sw, _) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
             Ok(())
         } else {
