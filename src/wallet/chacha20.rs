@@ -1,0 +1,195 @@
+// Deterministic RSA Prime Generation
+// Written in 2020 by
+//   Andrew Poelstra <apoelstra@wpsoftware.net>
+//
+// To the extent possible under law, the author(s) have dedicated all
+// copyright and related and neighboring rights to this software to
+// the public domain worldwide. This software is distributed without
+// any warranty.
+//
+// You should have received a copy of the CC0 Public Domain Dedication
+// along with this software.
+// If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
+//
+
+//! Chacha20 Stream Cipher
+//!
+//! This cipher is defined in RFC 8439.
+//!
+
+fn flatten_array(a: [[u8; 4]; 16]) -> [u8; 64] {
+    [
+        a[0][0], a[0][1], a[0][2], a[0][3],
+        a[1][0], a[1][1], a[1][2], a[1][3],
+        a[2][0], a[2][1], a[2][2], a[2][3],
+        a[3][0], a[3][1], a[3][2], a[3][3],
+        a[4][0], a[4][1], a[4][2], a[4][3],
+        a[5][0], a[5][1], a[5][2], a[5][3],
+        a[6][0], a[6][1], a[6][2], a[6][3],
+        a[7][0], a[7][1], a[7][2], a[7][3],
+        a[8][0], a[8][1], a[8][2], a[8][3],
+        a[9][0], a[9][1], a[9][2], a[9][3],
+        a[10][0], a[10][1], a[10][2], a[10][3],
+        a[11][0], a[11][1], a[11][2], a[11][3],
+        a[12][0], a[12][1], a[12][2], a[12][3],
+        a[13][0], a[13][1], a[13][2], a[13][3],
+        a[14][0], a[14][1], a[14][2], a[14][3],
+        a[15][0], a[15][1], a[15][2], a[15][3],
+    ]
+}
+
+pub fn chacha20(seed: [u8; 32], idx: u32, nonce: [u8; 12]) -> [u8; 64] {
+    fn quarter_round(x: &mut [u32], a: usize, b: usize, c: usize, d: usize) {
+        x[a] = x[a].wrapping_add(x[b]); x[d] = (x[d] ^ x[a]).rotate_left(16);
+        x[c] = x[c].wrapping_add(x[d]); x[b] = (x[b] ^ x[c]).rotate_left(12);
+        x[a] = x[a].wrapping_add(x[b]); x[d] = (x[d] ^ x[a]).rotate_left(8);
+        x[c] = x[c].wrapping_add(x[d]); x[b] = (x[b] ^ x[c]).rotate_left(7);
+    }
+
+    let init_x: [u32; 16] = [
+        0x61707865,
+        0x3320646e,
+        0x79622d32,
+        0x6b206574,
+        u32::from_le_bytes([seed[0], seed[1], seed[2], seed[3]]),
+        u32::from_le_bytes([seed[4], seed[5], seed[6], seed[7]]),
+        u32::from_le_bytes([seed[8], seed[9], seed[10], seed[11]]),
+        u32::from_le_bytes([seed[12], seed[13], seed[14], seed[15]]),
+        u32::from_le_bytes([seed[16], seed[17], seed[18], seed[19]]),
+        u32::from_le_bytes([seed[20], seed[21], seed[22], seed[23]]),
+        u32::from_le_bytes([seed[24], seed[25], seed[26], seed[27]]),
+        u32::from_le_bytes([seed[28], seed[29], seed[30], seed[31]]),
+        idx,
+        u32::from_le_bytes([nonce[0], nonce[1], nonce[2], nonce[3]]),
+        u32::from_le_bytes([nonce[4], nonce[5], nonce[6], nonce[7]]),
+        u32::from_le_bytes([nonce[8], nonce[9], nonce[10], nonce[11]]),
+    ];
+
+    let mut x = init_x;
+    for _ in 0..10 {
+        quarter_round(&mut x[..], 0, 4, 8,  12);
+        quarter_round(&mut x[..], 1, 5, 9,  13);
+        quarter_round(&mut x[..], 2, 6, 10, 14);
+        quarter_round(&mut x[..], 3, 7, 11, 15);
+
+        quarter_round(&mut x[..], 0, 5, 10, 15);
+        quarter_round(&mut x[..], 1, 6, 11, 12);
+        quarter_round(&mut x[..], 2, 7, 8,  13);
+        quarter_round(&mut x[..], 3, 4, 9,  14);
+    }
+
+    for i in 0..16 {
+        x[i] = x[i].wrapping_add(init_x[i]);
+    }
+
+    flatten_array([
+        x[0].to_be_bytes(),
+        x[1].to_be_bytes(),
+        x[2].to_be_bytes(),
+        x[3].to_be_bytes(),
+        x[4].to_be_bytes(),
+        x[5].to_be_bytes(),
+        x[6].to_be_bytes(),
+        x[7].to_be_bytes(),
+        x[8].to_be_bytes(),
+        x[9].to_be_bytes(),
+        x[10].to_be_bytes(),
+        x[11].to_be_bytes(),
+        x[12].to_be_bytes(),
+        x[13].to_be_bytes(),
+        x[14].to_be_bytes(),
+        x[15].to_be_bytes(),
+    ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixed_ietf_4() {
+        // Test vectors 1 to 5 from https://tools.ietf.org/html/rfc8439#appendix-A
+        let seed_1 = [0; 32];
+        let nonce_1 = [0; 12];
+        let expected_1 = [
+            0xad, 0xe0, 0xb8, 0x76, 0x90, 0x3d, 0xf1, 0xa0,
+            0xe5, 0x6a, 0x5d, 0x40, 0x28, 0xbd, 0x86, 0x53,
+            0xb8, 0x19, 0xd2, 0xbd, 0x1a, 0xed, 0x8d, 0xa0,
+            0xcc, 0xef, 0x36, 0xa8, 0xc7, 0x0d, 0x77, 0x8b,
+            0x7c, 0x59, 0x41, 0xda, 0x8d, 0x48, 0x57, 0x51,
+            0x3f, 0xe0, 0x24, 0x77, 0x37, 0x4a, 0xd8, 0xb8,
+            0xf4, 0xb8, 0x43, 0x6a, 0x1c, 0xa1, 0x18, 0x15,
+            0x69, 0xb6, 0x87, 0xc3, 0x86, 0x65, 0xee, 0xb2
+        ];
+
+        let seed_2 = [0; 32];
+        let nonce_2 = [0; 12];
+        let expected_2 = [
+            0xbe, 0xe7, 0x07, 0x9f, 0x7a, 0x38, 0x51, 0x55,
+            0x7c, 0x97, 0xba, 0x98, 0x0d, 0x08, 0x2d, 0x73,
+            0xa0, 0x29, 0x0f, 0xcb, 0x69, 0x65, 0xe3, 0x48,
+            0x3e, 0x53, 0xc6, 0x12, 0xed, 0x7a, 0xee, 0x32,
+            0x76, 0x21, 0xb7, 0x29, 0x43, 0x4e, 0xe6, 0x9c,
+            0xb0, 0x33, 0x71, 0xd5, 0xd5, 0x39, 0xd8, 0x74,
+            0x28, 0x1f, 0xed, 0x31, 0x45, 0xfb, 0x0a, 0x51,
+            0x1f, 0x0a, 0xe1, 0xac, 0x6f, 0x4d, 0x79, 0x4b
+        ];
+
+        let seed_3 = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+        ];
+        let nonce_3 = [0; 12];
+        let expected_3 = [
+            0x24, 0x52, 0xeb, 0x3a, 0x92, 0x49, 0xf8, 0xec,
+            0x8d, 0x82, 0x9d, 0x9b, 0xdd, 0xd4, 0xce, 0xb1,
+            0xe8, 0x25, 0x20, 0x83, 0x60, 0x81, 0x8b, 0x01,
+            0xf3, 0x84, 0x22, 0xb8, 0x5a, 0xaa, 0x49, 0xc9,
+            0xbb, 0x00, 0xca, 0x8e, 0xda, 0x3b, 0xa7, 0xb4,
+            0xc4, 0xb5, 0x92, 0xd1, 0xfd, 0xf2, 0x73, 0x2f,
+            0x44, 0x36, 0x27, 0x4e, 0x25, 0x61, 0xb3, 0xc8,
+            0xeb, 0xdd, 0x4a, 0xa6, 0xa0, 0x13, 0x6c, 0x00
+        ];
+
+        let seed_4 = [
+            0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        ];
+        let nonce_4 = [0; 12];
+        let expected_4 = [
+            0xfb, 0x4d, 0xd5, 0x72, 0x4b, 0xc4, 0x2e, 0xf1,
+            0xdf, 0x92, 0x26, 0x36, 0x32, 0x7f, 0x13, 0x94,
+            0xa7, 0x8d, 0xea, 0x8f, 0x5e, 0x26, 0x90, 0x39,
+            0xa1, 0xbe, 0xbb, 0xc1, 0xca, 0xf0, 0x9a, 0xae,
+            0xa2, 0x5a, 0xb2, 0x13, 0x48, 0xa6, 0xb4, 0x6c,
+            0x1b, 0x9d, 0x9b, 0xcb, 0x09, 0x2c, 0x5b, 0xe6,
+            0x54, 0x6c, 0xa6, 0x24, 0x1b, 0xec, 0x45, 0xd5,
+            0x87, 0xf4, 0x74, 0x73, 0x96, 0xf0, 0x99, 0x2e
+        ];
+
+        let seed_5 = [0; 32];
+        let nonce_5 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+        let expected_5 = [
+
+            0x37, 0x4d, 0xc6, 0xc2, 0x37, 0x36, 0xd5, 0x8c,
+            0xb9, 0x04, 0xe2, 0x4a, 0xcd, 0x3f, 0x93, 0xef,
+            0x88, 0x22, 0x8b, 0x1a, 0x96, 0xa4, 0xdf, 0xb3,
+            0x5b, 0x76, 0xab, 0x72, 0xc7, 0x27, 0xee, 0x54, 
+            0x0e, 0x0e, 0x97, 0x8a, 0xf3, 0x14, 0x5c, 0x95,
+            0x1b, 0x74, 0x8e, 0xa8, 0xf7, 0x86, 0xc2, 0x97, 
+            0x99, 0xc2, 0x8f, 0x5f, 0x62, 0x83, 0x14, 0xe8,
+            0x39, 0x8a, 0x19, 0xfa, 0x6d, 0xed, 0x1b, 0x53, 
+        ];
+
+        assert_eq!(chacha20(seed_1, 0, nonce_1)[..], expected_1[..]);
+        assert_eq!(chacha20(seed_2, 1, nonce_2)[..], expected_2[..]);
+        assert_eq!(chacha20(seed_3, 1, nonce_3)[..], expected_3[..]);
+        assert_eq!(chacha20(seed_4, 2, nonce_4)[..], expected_4[..]);
+        assert_eq!(chacha20(seed_5, 0, nonce_5)[..], expected_5[..]);
+    }
+}
+

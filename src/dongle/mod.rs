@@ -17,14 +17,10 @@
 //! Abstract API for communicating with the device
 //!
 
-use bitcoin::{Transaction, SigHashType};
-use bitcoin::network::constants::Network;
-
-use constants;
-use error::Error;
+use crate::{constants, Error};
 use self::message::{Command, Response};
-use spend::Spend;
-use util::convert_ledger_der_to_compact;
+//use spend::Spend;
+//use util::convert_ledger_der_to_compact;
 
 pub mod ledger;
 pub mod message;
@@ -35,9 +31,6 @@ pub trait Dongle {
     /// (status word, raw bytes). Generally this function is never used directly.
     fn exchange<C: Command>(&mut self, cmd: C) -> Result<(u16, Vec<u8>), Error>;
 
-    /// Returns the type of the device
-    fn product(&self) -> Product;
-
     /// Queries the device for its firmware version
     fn get_firmware_version(&mut self) -> Result<message::FirmwareVersion, Error> {
         let command = message::GetFirmwareVersion::new();
@@ -45,7 +38,10 @@ pub trait Dongle {
         if sw == constants::apdu::ledger::sw::OK {
             message::FirmwareVersion::decode(&rev)
         } else {
-            Err(Error::ApduBadStatus(sw))
+            Err(Error::ResponseBadStatus {
+                apdu: constants::apdu::ledger::Instruction::GetFirmwareVersion,
+                status: sw,
+            })
         }
     }
 
@@ -56,10 +52,14 @@ pub trait Dongle {
         if sw == constants::apdu::ledger::sw::OK {
             message::WalletPublicKey::decode(&rev)
         } else {
-            Err(Error::ApduBadStatus(sw))
+            Err(Error::ResponseBadStatus {
+                apdu: constants::apdu::ledger::Instruction::GetWalletPublicKey,
+                status: sw,
+            })
         }
     }
 
+/*
     /// Query the device to sign an arbitrary message
     fn sign_message(&mut self, message: &[u8], bip32_path: &[u32]) -> Result<[u8; 64], Error> {
         let command = message::SignMessagePrepare::new(bip32_path, message);
@@ -149,14 +149,6 @@ pub trait Dongle {
             Err(Error::ApduBadStatus(sw))
         }
     }
-}
-
-/// Enum representing the different devices we support
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Product {
-    /// Used in unit tests
-    TestJig,
-    /// Ledger Nano S
-    NanoS
+*/
 }
 

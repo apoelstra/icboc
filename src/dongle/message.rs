@@ -18,17 +18,15 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
-use bitcoin::{Transaction, SigHashType};
-use bitcoin::network::constants::Network;
+use miniscript::bitcoin::{self, Network, Transaction, SigHashType};
 use byteorder::{WriteBytesExt, BigEndian};
-use secp256k1::Secp256k1;
-use secp256k1::key::PublicKey;
-use std::cmp;
 
-use constants::apdu;
-use error::Error;
+use crate::{constants, Error};
+use crate::constants::apdu::ledger::{self, Instruction};
+/*
 use spend;
 use util::{encode_transaction_with_cutpoints, encode_spend_inputs_with_cutpoints, encode_spend_outputs_with_cutpoints};
+*/
 
 /// A message that can be received from the dongle
 pub trait Response: Sized {
@@ -74,7 +72,7 @@ impl Command for GetFirmwareVersion {
             None
         } else {
             self.sent = true;
-            Some(vec![apdu::ledger::BTCHIP_CLA, apdu::ledger::ins::GET_FIRMWARE_VERSION, 0, 0, 0])
+            Some(vec![ledger::BTCHIP_CLA, Instruction::GetFirmwareVersion.into_u8(), 0, 0, 0])
         }
     }
 
@@ -130,7 +128,11 @@ impl Response for FirmwareVersion {
         // ultimately never became real, and is just vestigial, according to Nicolas
         // on Slack.
         if data.len() < 5 || data.len() > 8 {
-            return Err(Error::ResponseWrongLength(apdu::ledger::ins::GET_FIRMWARE_VERSION, data.len()));
+            return Err(Error::ResponseWrongLength {
+                apdu: Instruction::GetFirmwareVersion,
+                expected: 5..9,
+                found: data.len(),
+            });
         }
 
         let loader_major;
@@ -193,9 +195,9 @@ impl<'a> Command for GetWalletPublicKey<'a> {
         self.sent = true;
 
         let mut ret = Vec::with_capacity(5 + 4 * self.bip32_path.len());
-        ret.push(apdu::ledger::BTCHIP_CLA);
-        ret.push(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY);
-        ret.push(if self.display {1} else {0});
+        ret.push(ledger::BTCHIP_CLA);
+        ret.push(Instruction::GetWalletPublicKey.into_u8());
+        ret.push(self.display.into());
         ret.push(0);
         ret.push((1 + 4 * self.bip32_path.len()) as u8);
         ret.push(self.bip32_path.len() as u8);
@@ -225,7 +227,7 @@ impl<'a> Command for GetWalletPublicKey<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletPublicKey {
     /// The EC public key
-    pub public_key: PublicKey,
+    pub public_key: bitcoin::PublicKey,
     /// The base58-encoded address corresponding to the public key
     pub b58_address: String,
     /// The BIP32 chaincode associated to this key
@@ -234,17 +236,20 @@ pub struct WalletPublicKey {
 
 impl Response for WalletPublicKey {
     fn decode(data: &[u8]) -> Result<WalletPublicKey, Error> {
-        let secp = Secp256k1::without_caps();
-
         let pk_len = data[0] as usize;
         if 2 + pk_len > data.len() {
             return Err(Error::UnexpectedEof);
         }
-        let pk = PublicKey::from_slice(&secp, &data[1..1+pk_len])?;
+        let pk = bitcoin::PublicKey::from_slice(&data[1..1+pk_len])?;
 
         let addr_len = data[1 + pk_len] as usize;
-        if 2 + pk_len + addr_len + 32 != data.len() {
-            return Err(Error::ResponseWrongLength(apdu::ledger::ins::GET_WALLET_PUBLIC_KEY, data.len()));
+        let expected_len = 2 + pk_len + addr_len + 32;
+        if expected_len != data.len() {
+            return Err(Error::ResponseWrongLength {
+                apdu: Instruction::GetWalletPublicKey,
+                expected: expected_len..expected_len,
+                found: data.len(),
+            });
         }
         let addr = String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned())?;
 
@@ -258,6 +263,7 @@ impl Response for WalletPublicKey {
     }
 }
 
+/*
 /// SIGN MESSAGE prepare message
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignMessagePrepare<'a> {
@@ -847,4 +853,4 @@ impl Command for SetAlternateCoinVersions {
         (self.sw, vec![])
     }
 }
-
+*/

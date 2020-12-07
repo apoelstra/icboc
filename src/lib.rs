@@ -1,5 +1,5 @@
-// ICBOC
-// Written in 2017 by
+// ICBOC 3D
+// Written in 2020 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -27,22 +27,23 @@
 #![deny(unused_mut)]
 #![deny(missing_docs)]
 
-extern crate base64;
-extern crate bitcoin;
-extern crate byteorder;
-extern crate crypto;
-#[macro_use] extern crate log;
-extern crate hex;
-extern crate hid;
-extern crate secp256k1;
-extern crate time;
-
 pub mod constants;
-pub mod dongle;
-pub mod error;
-pub mod spend;
-pub mod util;
-pub mod wallet;
+mod dongle;
+mod error;
+mod wallet;
+
+pub use dongle::Dongle;
+pub use dongle::ledger;
+pub use error::Error;
+
+// Re-export all the hidapi types because the double `hidapi::HidDevice`
+// naming bugs me
+/// Re-exports of types from `hidapi` with nicer names
+pub mod hid {
+    pub use hidapi::HidApi as Api;
+    pub use hidapi::HidDevice as Device;
+    pub use hidapi::HidError as Error;
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
-// ICBOC 3D
-// Written in 2020 by
+// ICBOC
+// Written in 2017 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -22,9 +22,6 @@
 //!
 
 use anyhow::Context;
-use icboc::Dongle;
-use std::{env, io};
-use std::io::{BufRead, Write};
 
 /// Prompt the user for some string data
 fn user_prompt(prompt: &str) -> String {
@@ -37,7 +34,7 @@ fn user_prompt(prompt: &str) -> String {
 }
 
 /// Prints the usage information and then halts the program
-fn usage_and_die(name: &str) -> anyhow::Result<()> {
+fn usage_and_die(name: &str) -> Result<(), MainError> {
     println!("Usage: {} <wallet filename> <command>", name);
     println!("  {} <filename> init <account> <n_entries>", name);
     println!("  {} <filename> init-testnet <account> <n_entries>", name);
@@ -58,8 +55,6 @@ fn usage_and_die(name: &str) -> anyhow::Result<()> {
     println!("Note that several commands do a linear scan of the entire wallet,");
     println!("since dongle cooperation is required to decrypt each individual");
     println!("entry. These commands will be very slow.");
-
-    Err(anyhow::Error::msg("invalid usage"))
 }
 
 /// Entry point
@@ -72,33 +67,42 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Contact device and run GET FIRMWARE to sanity check it
-    let hid_api = icboc::hid::Api::new()
-        .context("getting HID API context")?;
-    let mut dongle = icboc::ledger::NanoS::get(&hid_api)
+    let mut dongle = icebox::Ledger::get_unique()
         .context("finding dongle")?;
+
+    println!("Successfully found dongle {:?}", dongle.product());
     let version = dongle.get_firmware_version()
         .context("getting firmware version")?;
 
-    println!("Found dongle. Firmware version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
+    println!("Firmware version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
 
 /*
     // Decide what to do
     match &args[2][..] {
         // Create a new wallet
-        "init" => {
-            if args.len() < 2 {
+        "init" | "init-testnet" => {
+            if args.len() < 5 {
                 usage_and_die(&args[0]);
             }
 
             let filename = &args[1];
+            let account = u32::from_str(&args[3]).expect("Parsing account as number");
+            let entries = usize::from_str(&args[4]).expect("Parsing n_entries as number");
 
             if fs::metadata(filename).is_ok() {
                 println!("File {} already exists. Please move it out of the way to initialize a new wallet.", filename);
-                return Err(anyhow::Error::msg("will not overwrite file with new wallet"));
+                process::exit(1);
+            }
+
+            let network;
+            if args[2] == "init-testnet" {
+                network = Network::Testnet;
+            } else {
+                network = Network::Bitcoin;
             }
 
             let wallet = pretty_unwrap("Creating wallet",
-                                       icboc::wallet::EncryptedWallet::new(&mut dongle, network, account, entries));
+                                       icebox::wallet::EncryptedWallet::new(&mut dongle, network, account, entries));
             pretty_unwrap("Saving wallet",
                           wallet.save(filename));
         }
@@ -112,7 +116,7 @@ fn main() -> anyhow::Result<()> {
             let n_entries = usize::from_str(&args[3]).expect("Parsing n_entries as number");
 
             let mut wallet = pretty_unwrap("Loading wallet",
-                                           icboc::wallet::EncryptedWallet::load(&mut dongle, filename));
+                                           icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             if wallet.n_entries() >= n_entries {
                 println!("Wallet already has {} entries, not decreasing.", wallet.n_entries());
             } else {
@@ -130,7 +134,7 @@ fn main() -> anyhow::Result<()> {
 
             let filename = &args[1];
             let wallet = pretty_unwrap("Loading wallet",
-                                       icboc::wallet::EncryptedWallet::load(&mut dongle, filename));
+                                       icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             println!("Wallet: {} entries, account {}.", wallet.n_entries(), wallet.account());
             if args.len() > 3 {
                 // An index > length 10 is an address, we scan for it
@@ -163,7 +167,7 @@ fn main() -> anyhow::Result<()> {
 
             let filename = &args[1];
             let wallet = pretty_unwrap("Loading wallet",
-                                       icboc::wallet::EncryptedWallet::load(&mut dongle, filename));
+                                       icebox::wallet::EncryptedWallet::load(&mut dongle, filename));
             // An index > length 10 is an address, we scan for it
             let entry = if args[3].len() > 10 {
                 pretty_unwrap("Searching for entry", wallet.search(&mut dongle, &args[3]))

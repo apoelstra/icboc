@@ -1,5 +1,5 @@
-// ICBOC
-// Written in 2017 by
+// ICBOC 3D
+// Written in 2020 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -43,16 +43,48 @@ pub mod apdu {
         pub const BTCHIP_CLA: u8 = 0xe0;
 
         /// Instructions
-        pub mod ins {
-            pub const SET_ALTERNATE_COIN_VERSION: u8 = 0x14;
-            pub const GET_WALLET_PUBLIC_KEY: u8 = 0x40;
-            pub const GET_TRUSTED_INPUT: u8 = 0x42;
-            pub const UNTRUSTED_HASH_TRANSACTION_INPUT_START: u8 = 0x44;
-            pub const UNTRUSTED_HASH_SIGN: u8 = 0x48;
-            pub const UNTRUSTED_HASH_TRANSACTION_INPUT_FINALIZE: u8 = 0x4a;
-            pub const SIGN_MESSAGE: u8 = 0x4e;
-            pub const GET_RANDOM: u8 = 0xc0;
-            pub const GET_FIRMWARE_VERSION: u8 = 0xc4;
+        #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+        pub enum Instruction {
+            SetAlternateCoinVersion,
+            GetWalletPublicKey,
+            GetTrustedInput,
+            UntrustedHashTransactionInputStart,
+            UntrustedHashSign,
+            UntrustedHashTransactionInputFinalize,
+            SignMessage,
+            GetRandom,
+            GetFirmwareVersion,
+        }
+
+        impl Instruction {
+            pub fn into_u8(self) -> u8 {
+                match self {
+                    Instruction::SetAlternateCoinVersion => 0x14,
+                    Instruction::GetWalletPublicKey => 0x40,
+                    Instruction::GetTrustedInput => 0x42,
+                    Instruction::UntrustedHashTransactionInputStart => 0x44,
+                    Instruction::UntrustedHashSign => 0x48,
+                    Instruction::UntrustedHashTransactionInputFinalize => 0x4a,
+                    Instruction::SignMessage => 0x4e,
+                    Instruction::GetRandom => 0xc0,
+                    Instruction::GetFirmwareVersion => 0xc4,
+                }
+            }
+
+            pub fn from_u8(b: u8) -> Option<Self> {
+                match b {
+                    0x14 => Some(Instruction::SetAlternateCoinVersion),
+                    0x40 => Some(Instruction::GetWalletPublicKey),
+                    0x42 => Some(Instruction::GetTrustedInput),
+                    0x44 => Some(Instruction::UntrustedHashTransactionInputStart),
+                    0x48 => Some(Instruction::UntrustedHashSign),
+                    0x4a => Some(Instruction::UntrustedHashTransactionInputFinalize),
+                    0x4e => Some(Instruction::SignMessage),
+                    0xc0 => Some(Instruction::GetRandom),
+                    0xc4 => Some(Instruction::GetFirmwareVersion),
+                    _ => None,
+                }
+            }
         }
 
         /// Status Words
@@ -77,9 +109,9 @@ pub mod apdu {
 pub mod wallet {
     /// Magic bytes indicating a wallet file (bottom two are a version)
     /// First six bytes are guaranteed random: used `wget boards.4chan.org/b/ -O - | sha256sum` to compute
-    pub const MAGIC: u64 = 0x3160_f90d_aae5_0001;
+    pub const MAGIC: u64 = 0x3160_f90d_aae5_0003;
     /// Magic bytes indicating a testnet wallet file
-    pub const MAGIC_TESTNET: u64 = 0x3160_f90d_aae5_0002;
+    pub const MAGIC_TESTNET: u64 = 0x3160_f90d_aae5_0004;
     /// Size, in bytes, of the data block for each entry.
     pub const DECRYPTED_ENTRY_SIZE: usize = 336;
     /// Size, in bytes, of the AES-CTR-encrypted data block.
@@ -91,6 +123,21 @@ pub mod wallet {
     /// An amount of satoshis which, if we have change worth less than, we simply
     /// drop it into fees
     pub const CHANGE_DUST: u64 = 1_0000; // 0.0001 BTC, around 10c USD
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apdu_instruction_round_trip() {
+        for byte in 0..256 {
+            let byte = byte as u8;
+            if let Some(ins) = apdu::ledger::Instruction::from_u8(byte) {
+                assert_eq!(byte, ins.into_u8());
+            }
+        }
+    }
 }
 
 

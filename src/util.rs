@@ -1,5 +1,5 @@
-// ICBOC
-// Written in 2017 by
+// ICBOC 3D
+// Written in 2020 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all

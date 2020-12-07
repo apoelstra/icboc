@@ -1,4 +1,7 @@
 
+
+cargo update -p cc --precise "1.0.61" --verbose
+
 # ICBOC
 
 ICBOC, or "Ice Cold Box of Coins", was originally named Icebox, but it turned
