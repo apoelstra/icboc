@@ -12,9 +12,12 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! Wallet Serialization
+//! Wallet Cryter
 //!
-//! Support for the "wallet" which is really more of an audit log
+//! Defines a wrapper around io::Read and Write which does a simple
+//! encrypt-then-MAC scheme using chacha20 and hmac-sha256. Does not
+//! do any randomization; requires the user supply a uniformly random
+//! 32-byte key and a unique (per message and key) 12-byte nonce.
 //!
 
 use miniscript::bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
@@ -203,6 +206,7 @@ impl<W: io::Write> CryptWriter<W> {
 impl<W: io::Write> io::Write for CryptWriter<W> {
     /// Puts some wallet data into the encrypted writer
     fn write(&mut self, mut data: &[u8]) -> io::Result<usize> {
+        let total_len = data.len();
         while !data.is_empty() {
             let enc_written = self.written_len - 16;
             let chacha_idx = (enc_written / CHACHA_SLICE_LEN) as u32;
@@ -221,7 +225,7 @@ impl<W: io::Write> io::Write for CryptWriter<W> {
             self.written_len += written_len;
             data = &data[written_len..];
         }
-        Ok(data.len())
+        Ok(total_len)
     }
 
     /// Flushes the underlying writer

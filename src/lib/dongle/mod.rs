@@ -17,10 +17,13 @@
 //! Abstract API for communicating with the device
 //!
 
+use miniscript::bitcoin::secp256k1;
+use miniscript::bitcoin::util::bip32;
+
 use crate::{constants, Error};
+use crate::util::parse_ledger_signature;
 use self::message::{Command, Response};
 //use spend::Spend;
-//use util::convert_ledger_der_to_compact;
 
 pub mod ledger;
 pub mod message;
@@ -46,7 +49,11 @@ pub trait Dongle {
     }
 
     /// Queries the device for a BIP32 extended pubkey
-    fn get_public_key(&mut self, bip32_path: &[u32], display: bool) -> Result<message::WalletPublicKey, Error> {
+    fn get_public_key<P: AsRef<[bip32::ChildNumber]>>(
+        &mut self,
+        bip32_path: &P,
+        display: bool,
+    ) -> Result<message::WalletPublicKey, Error> {
         let command = message::GetWalletPublicKey::new(bip32_path, display);
         let (sw, rev) = self.exchange(command)?;
         if sw == constants::apdu::ledger::sw::OK {
@@ -59,13 +66,20 @@ pub trait Dongle {
         }
     }
 
-/*
     /// Query the device to sign an arbitrary message
-    fn sign_message(&mut self, message: &[u8], bip32_path: &[u32]) -> Result<[u8; 64], Error> {
+    fn sign_message<P: AsRef<[bip32::ChildNumber]>>(
+        &mut self,
+        message: &[u8],
+        bip32_path: &P,
+    ) -> Result<secp256k1::Signature, Error> {
         let command = message::SignMessagePrepare::new(bip32_path, message);
         let (sw, rev) = self.exchange(command)?;
+        // This should never happen unless we exceed Ledger limits
         if sw != constants::apdu::ledger::sw::OK {
-            return Err(Error::ApduBadStatus(sw));
+            return Err(Error::ResponseBadStatus {
+                apdu: constants::apdu::ledger::Instruction::SignMessage,
+                status: sw,
+            });
         }
 
         if rev != &[0, 0] {
@@ -73,14 +87,18 @@ pub trait Dongle {
         }
 
         let command = message::SignMessageSign::new();
-        let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
-            convert_ledger_der_to_compact(&rev)
-        } else {
-            Err(Error::ApduBadStatus(sw))
+        let (sw, mut rev) = self.exchange(command)?;
+        match sw {
+            constants::apdu::ledger::sw::OK => Ok(parse_ledger_signature(&mut rev)?),
+            constants::apdu::ledger::sw::SIGN_REFUSED => Err(Error::UserRefusedSignMessage),
+            sw => Err(Error::ResponseBadStatus {
+                apdu: constants::apdu::ledger::Instruction::SignMessage,
+                status: sw,
+            }),
         }
     }
 
+/*
     /// Query the device for up to 255 random bytes
     fn get_random(&mut self, n: u8) -> Result<Vec<u8>, Error> {
         let command = message::GetRandom::new(n);

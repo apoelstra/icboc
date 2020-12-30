@@ -37,7 +37,7 @@ impl Dongle for NanoS {
     fn exchange<C: Command>(&mut self, mut cmd: C) -> Result<(u16, Vec<u8>), Error> {
         while let Some(msg) = cmd.encode_next(constants::apdu::ledger::MAX_APDU_SIZE) {
             write_apdu(&self.hid_dev, &msg)?;
-            let reply = read_apdu(&self.hid_dev, Duration::from_secs(10))?;  // TODO make this configurable
+            let reply = read_apdu(&self.hid_dev, Duration::from_secs(30))?;  // TODO make this configurable
             cmd.decode_reply(reply)?;
         }
         Ok(cmd.into_reply())
@@ -113,7 +113,11 @@ fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error>
     while receive_len > 0 {
         // Read next frame
         let mut data_frame = [0u8; constants::apdu::ledger::PACKET_SIZE];
-        hid_dev.read_timeout(&mut data_frame[..], timeout.as_millis() as i32)?; // FIXME use this return value
+        let mut frame_ptr = &mut data_frame[..];
+        while !frame_ptr.is_empty() {
+            let n_read_bytes = hid_dev.read_timeout(frame_ptr, timeout.as_millis() as i32)?;
+            frame_ptr = &mut frame_ptr[n_read_bytes..];
+        }
 
         // Sanity check the frame
         let r_channel = BigEndian::read_u16(&data_frame[0..2]);

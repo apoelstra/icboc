@@ -61,6 +61,10 @@ pub enum Error {
         expected: ops::Range<usize>,
         found: usize,
     },
+    #[error("secp256k1")]
+    Secp256k1(#[from] bitcoin::secp256k1::Error),
+    #[error("user refused to sign message")]
+    UserRefusedSignMessage,
     #[error("unexpected end-of-data")]
     UnexpectedEof,
 

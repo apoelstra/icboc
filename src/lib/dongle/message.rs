@@ -19,7 +19,9 @@
 //!
 
 use miniscript::bitcoin::{self, Network, Transaction, SigHashType};
+use miniscript::bitcoin::util::bip32;
 use byteorder::{WriteBytesExt, BigEndian};
+use std::cmp;
 
 use crate::{constants, Error};
 use crate::constants::apdu::ledger::{self, Instruction};
@@ -57,7 +59,7 @@ pub struct GetFirmwareVersion {
 
 impl GetFirmwareVersion {
     /// Constructor
-    pub fn new() -> GetFirmwareVersion {
+    pub fn new() -> Self {
         GetFirmwareVersion {
             sent: false,
             reply: vec![],
@@ -168,20 +170,20 @@ pub struct GetWalletPublicKey<'a> {
     sent: bool,
     reply: Vec<u8>,
     sw: u16,
-    bip32_path: &'a [u32],
-    display: bool
+    bip32_path: &'a [bip32::ChildNumber],
+    display: bool,
 }
 
 impl<'a> GetWalletPublicKey<'a> {
     /// Constructor
-    pub fn new(bip32_path: &'a [u32], display: bool) -> GetWalletPublicKey {
-        assert!(bip32_path.len() < 11);  // limitation of the Nano S
+    pub fn new<P: AsRef<[bip32::ChildNumber]>>(bip32_path: &'a P, display: bool) -> Self {
+        assert!(bip32_path.as_ref().len() < 11);  // limitation of the Nano S
 
         GetWalletPublicKey {
             sent: false,
             reply: vec![],
             sw: 0,
-            bip32_path: bip32_path,
+            bip32_path: bip32_path.as_ref(),
             display: display
         }
     }
@@ -201,8 +203,8 @@ impl<'a> Command for GetWalletPublicKey<'a> {
         ret.push(0);
         ret.push((1 + 4 * self.bip32_path.len()) as u8);
         ret.push(self.bip32_path.len() as u8);
-        for childnum in self.bip32_path {
-            let _ = ret.write_u32::<BigEndian>(*childnum);
+        for &childnum in self.bip32_path {
+            let _ = ret.write_u32::<BigEndian>(childnum.into());
         }
         Some(ret)
     }
@@ -263,34 +265,33 @@ impl Response for WalletPublicKey {
     }
 }
 
-/*
 /// SIGN MESSAGE prepare message
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SignMessagePrepare<'a> {
+pub struct SignMessagePrepare<'path, 'msg> {
     sent_length: usize,
     reply: Vec<u8>,
     sw: u16,
-    bip32_path: &'a [u32],
-    message: &'a [u8]
+    bip32_path: &'path [bip32::ChildNumber],
+    message: &'msg [u8]
 }
 
-impl<'a> SignMessagePrepare<'a> {
+impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
     /// Constructor
-    pub fn new(bip32_path: &'a [u32], message: &'a [u8]) -> SignMessagePrepare<'a> {
-        assert!(bip32_path.len() < 11);   // limitation of the Nano S
+    pub fn new<P: AsRef<[bip32::ChildNumber]>>(bip32_path: &'path P, message: &'msg [u8]) -> Self {
+        assert!(bip32_path.as_ref().len() < 11);   // limitation of the Nano S
         assert!(message.len() < 0x10000); // limitation of the Nano S
 
         SignMessagePrepare {
             sent_length: 0,
             reply: vec![],
             sw: 0,
-            bip32_path: bip32_path,
+            bip32_path: bip32_path.as_ref(),
             message: message
         }
     }
 }
 
-impl<'a> Command for SignMessagePrepare<'a> {
+impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent_length > self.message.len() {
             unreachable!();  // sanity check
@@ -309,14 +310,14 @@ impl<'a> Command for SignMessagePrepare<'a> {
                 (init_data_len + message_len, message_len)
             };
             let mut ret = Vec::with_capacity(5 + packet_len);
-            ret.push(apdu::ledger::BTCHIP_CLA);
-            ret.push(apdu::ledger::ins::SIGN_MESSAGE);
+            ret.push(ledger::BTCHIP_CLA);
+            ret.push(Instruction::SignMessage.into_u8());
             ret.push(0x00);  // preparing...
             ret.push(0x01);  // ...the first part of the message
             ret.push(packet_len as u8);
             ret.push(self.bip32_path.len() as u8);
-            for childnum in self.bip32_path {
-                let _ = ret.write_u32::<BigEndian>(*childnum);
+            for &childnum in self.bip32_path {
+                let _ = ret.write_u32::<BigEndian>(childnum.into());
             }
             let _ = ret.write_u16::<BigEndian>(self.message.len() as u16);
             ret.extend(&self.message[0..message_len]);
@@ -328,8 +329,8 @@ impl<'a> Command for SignMessagePrepare<'a> {
             let packet_len = cmp::min(apdu_size - 5, remaining_len);
 
             let mut ret = Vec::with_capacity(5 + packet_len);
-            ret.push(apdu::ledger::BTCHIP_CLA);
-            ret.push(apdu::ledger::ins::SIGN_MESSAGE);
+            ret.push(ledger::BTCHIP_CLA);
+            ret.push(Instruction::SignMessage.into_u8());
             ret.push(0x00);  // preparing...
             ret.push(0x80);  // ...the next part of the message
             ret.push(packet_len as u8);
@@ -345,16 +346,9 @@ impl<'a> Command for SignMessagePrepare<'a> {
         }
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
-        if data.len() > 2 {
-            return Err(Error::Unsupported);
-        }
         self.reply = data;
         self.sw = ((sw1 as u16) << 8) + sw2 as u16;
-        if self.sw != apdu::ledger::sw::OK {
-            Err(Error::ApduBadStatus(self.sw))
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -388,8 +382,8 @@ impl Command for SignMessageSign {
         } else {
             self.sent = true;
             Some(vec![
-                apdu::ledger::BTCHIP_CLA,
-                apdu::ledger::ins::SIGN_MESSAGE,
+                ledger::BTCHIP_CLA,
+                Instruction::SignMessage.into_u8(),
                 0x80, // signing
                 0x00, // irrelevant
                 0x01, // no user authentication needed
@@ -414,6 +408,7 @@ impl Command for SignMessageSign {
     }
 }
 
+/*
 /// GET RANDOM message
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetRandom {

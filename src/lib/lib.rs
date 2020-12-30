@@ -31,10 +31,12 @@ pub mod constants;
 mod dongle;
 mod error;
 mod wallet;
+mod util;
 
 pub use dongle::Dongle;
 pub use dongle::ledger;
 pub use error::Error;
+pub use wallet::Wallet;
 
 // Re-export all the hidapi types because the double `hidapi::HidDevice`
 // naming bugs me

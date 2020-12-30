@@ -5,7 +5,7 @@ authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
 edition = "2018"
 
 [lib]
-path = "src/lib.rs"
+path = "src/lib/lib.rs"
 
 [[bin]]
 name = "icboc"
@@ -14,16 +14,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.0"
+getrandom = { version = "0.2", features = [ "std" ] }
+jsonrpc = { version = "0.11", path = "../../rust-bitcoin/rust-jsonrpc/newrpc" }
 hidapi = "1.2"
 miniscript = "4.0"
+shellexpand = "2.0"
 thiserror = "1.0"
-
-base64 = "0.9"
-bitcoin = "0.14"
-rust-crypto = "0.2"
-hex = "0.2"
-log = "0.3"
-secp256k1 = "0.11"
-simplelog = "0.4"
-time = "0.1"
+structopt = "0.3"
 

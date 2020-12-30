@@ -23,8 +23,34 @@
 
 use anyhow::Context;
 use icboc::Dongle;
+use miniscript::bitcoin;
+use miniscript::bitcoin::hashes::{Hash, sha256};
+use miniscript::bitcoin::util::bip32;
 use std::{env, io};
 use std::io::{BufRead, Write};
+use structopt::StructOpt;
+
+use jsonrpc;
+
+/// Special message which has a very recognizeable pattern when
+/// displayed on the Ledger "sign this message?" screen
+pub const KEYSIG_MESSAGE: [u8; 32] = [
+    0xb6, 0x02, 0xc8, 0x35, 0x8a, 0x73, 0xee, 0xb1, 0x3c, 0xfd, 0x3f, 0x3c, 0xfa, 0x16, 0xfe, 0x38,
+    0xfa, 0x08, 0x37, 0x03, 0xa8, 0x87, 0x47, 0xaf, 0x7b, 0xd6, 0xe0, 0x4c, 0x54, 0x0e, 0xef, 0x1b, 
+];
+
+/// Path on which to request the signature
+///
+/// For some reason the Ledger does not display to the user what this path is,
+/// so it really doesn't matter, we just need to be consistent. But make half
+/// an effort to not collide with paths other applications might use.
+pub const KEYSIG_PATH: [bip32::ChildNumber; 2] = [
+    bip32::ChildNumber::Hardened { index: 0xABCD },
+    bip32::ChildNumber::Hardened { index: 0x1234 },
+];
+
+mod commands;
+mod rpc;
 
 /// Prompt the user for some string data
 fn user_prompt(prompt: &str) -> String {
@@ -36,40 +62,14 @@ fn user_prompt(prompt: &str) -> String {
     line_res.expect("reading from stdin")
 }
 
-/// Prints the usage information and then halts the program
-fn usage_and_die(name: &str) -> anyhow::Result<()> {
-    println!("Usage: {} <wallet filename> <command>", name);
-    println!("  {} <filename> init <account> <n_entries>", name);
-    println!("  {} <filename> init-testnet <account> <n_entries>", name);
-    println!("  {} <filename> extend <new n_entries>", name);
-    println!("  {} <filename> rerandomize", name);
-    println!("");
-    println!("  {} <filename> getaddress [address index]", name);
-    println!("  {} <filename> getbalance", name);
-    println!("  {} <filename> info [address|index]", name);
-    println!("  {} <filename> signmessage [address|index] [message]", name);
-    println!("  {} <filename> receive <hex tx>", name);
-    println!("");
-    println!("  {} <filename> sendto <feerate> <destination> <amount> [<destination> <amount>...]", name);
-    println!("");
-    println!("All Bitcoin amounts should be specified in satoshi. No decimals.");
-    println!("The feerate is given in satoshis per kilobyte.");
-    println!("");
-    println!("Note that several commands do a linear scan of the entire wallet,");
-    println!("since dongle cooperation is required to decrypt each individual");
-    println!("entry. These commands will be very slow.");
-
-    Err(anyhow::Error::msg("invalid usage"))
-}
-
 /// Entry point
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    match args.len() {
-        0 => usage_and_die("")?,
-        1 | 2 => usage_and_die(&args[0])?,
-        _ => {}
-    }
+    let opts = commands::Options::from_args();
+
+    // Talk to the bitcoind
+    let bitcoind = rpc::Bitcoind::connect(&opts)?;
+    let n: usize = bitcoind.getblockcount()?;
+    println!("{} blocks" , n);
 
     // Contact device and run GET FIRMWARE to sanity check it
     let hid_api = icboc::hid::Api::new()
@@ -78,8 +78,14 @@ fn main() -> anyhow::Result<()> {
         .context("finding dongle")?;
     let version = dongle.get_firmware_version()
         .context("getting firmware version")?;
-
     println!("Found dongle. Firmware version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
+
+    // Get an encryption key for the wallet
+    let secp = bitcoin::secp256k1::Secp256k1::new();
+    let sig = dongle.sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)?;
+    let wallet_key: [u8; 32] = sha256::Hash::hash(&sig.serialize_compact()).into_inner();
+
+    opts.command.execute(&opts.wallet_file, wallet_key)?;
 
 /*
     // Decide what to do
