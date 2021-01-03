@@ -14,13 +14,16 @@
 
 //! Argument Parsing
 //!
-//! Different subcommands supported by the command-line utility  
+//! Different subcommands supported by the command-line utility
 //!
 
 use anyhow::{self, Context};
-use icboc::Wallet;
+use icboc::{Dongle, Wallet};
+use icboc::ledger::NanoS;
+use miniscript::DescriptorTrait;
+use miniscript::bitcoin::Network;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -34,6 +37,18 @@ pub enum Command {
     Info {
         #[structopt(name="what")]
         what: Option<String>,
+    },
+    ImportDescriptor {
+        /// The descriptor to import
+        #[structopt(name="descriptor")]
+        desc: miniscript::Descriptor<miniscript::DescriptorPublicKey>,
+        /// For ranged descriptors, first index to use. If a minimum is provided
+        /// without a maximum, will instead use the range 0 through min.
+        #[structopt(name="range_min")]
+        lo: Option<u32>,
+        /// For ranged descriptors, last index to use
+        #[structopt(name="range_max")]
+        hi: Option<u32>,
     },
 }
 
@@ -61,12 +76,28 @@ pub struct Options {
 
 impl Command {
     /// Executes the command
-    pub fn execute(&self, wallet_file: &PathBuf, wallet_key: [u8; 32]) -> anyhow::Result<()> {
-        let wallet_name = wallet_file.to_string_lossy();
+    pub fn execute<P: AsRef<Path>>(
+        self,
+        wallet_file: P,
+        wallet_key: [u8; 32],
+        dongle: &mut NanoS,
+    ) -> anyhow::Result<()> {
+        let wallet_name = wallet_file.as_ref().to_string_lossy();
 
-        match *self {
+        let mut wallet;
+        if let Command::Init { .. } = self {
+            wallet = Wallet::new();
+        } else {
+            let fh = fs::File::open(&wallet_file)
+                .with_context(|| format!("opening wallet {}", wallet_name))?;
+            wallet = Wallet::from_reader(fh, wallet_key)
+                .with_context(|| format!("reading wallet {}", wallet_name))?;
+            println!("Opened wallet at {} with {} descriptors and {} txos.", wallet_name, wallet.descriptors.len(), wallet.txos.len());
+        }
+
+        match self {
             Command::Init { force } => {
-                if fs::metadata(wallet_file).is_ok() {
+                if fs::metadata(&wallet_file).is_ok() {
                     if force {
                         println!("WARNING: file {} already exists, overwriting.", wallet_name);
                     } else {
@@ -75,23 +106,53 @@ impl Command {
                     }
                 }
 
-                let fh = fs::File::create(wallet_file)?;
-                icboc::Wallet::new().write(fh, wallet_key)
+                let fh = fs::File::create(&wallet_file)?;
+                wallet.write(fh, wallet_key)
                     .with_context(|| format!("writing to wallet {}", wallet_name))?;
                 println!("Initialized wallet at {}.", wallet_name);
+                return Ok(());
             },
             Command::Info { ref what } => {
-                let fh = fs::File::open(wallet_file)
-                    .with_context(|| format!("opening wallet {}", wallet_name))?;
-                let wallet = icboc::Wallet::from_reader(fh, wallet_key)
-                    .with_context(|| format!("reading wallet {}", wallet_name))?;
                 if let Some(ref thing) = *what {
+                    // TODO
                 } else {
-                    println!("Opened wallet at {} with {} descriptors and {} txos.", wallet_name, wallet.descriptors.len(), wallet.txos.len());
                     println!("Assuming height {} is confirmed and will not rescan these blocks except when importing descriptors.", wallet.block_height);
+                    let master_xpub = dongle.get_master_xpub()?;
+                    println!("Dongle master xpub: {}", master_xpub);
+                    println!("Dongle master fingerprint: {}", master_xpub.fingerprint());
                 }
             },
+            Command::ImportDescriptor { desc, lo, hi } => {
+                let range = match (lo, hi) {
+                    (None, None) => 0..101,
+                    (Some(lo), None) => 0..lo + 1,
+                    (Some(lo), Some(hi)) => lo..hi + 1,
+                    (None, Some(_)) => unreachable!("structopt won't let this happen"),
+                };
+                if range.start >= range.end {
+                    return Err(anyhow::Error::msg(format!("invalid range {:?}", range)));
+                }
+
+                println!("Asked to import descriptor {}. Generating addresses from {} through {}", desc, range.start, range.end - 1);
+                let n_added = wallet.add_descriptor(desc, range.start, range.end, &mut *dongle)
+                    .with_context(|| "importing descriptor")?;
+                if n_added == 0 {
+                    println!("Wallet already has all keys from {} through {}.", range.start, range.end - 1);
+                    return Err(anyhow::Error::msg("nothing to do"));
+                }
+                println!("Imported {} new addresses. You should now call `rescan`.", n_added);
+            },
         }
+
+        // Write out wallet
+        let tmp_name = wallet_file.as_ref().to_string_lossy().into_owned() + ".tmp";
+        let fh = fs::File::create(&tmp_name)?;
+        wallet.write(fh, wallet_key)
+            .with_context(|| format!("writing to wallet {}", wallet_name))?;
+        // Above line took `fh` by value, dropping it, so we can safely rename here
+        fs::rename(&tmp_name, &wallet_file)
+            .with_context(|| format!("renaming {} to {}", tmp_name, wallet_name))?;
+
         Ok(())
     }
 }

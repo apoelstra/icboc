@@ -21,7 +21,7 @@
 //!
 
 use miniscript::bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
-use std::{cmp, io, mem};
+use std::{cmp, io};
 use std::io::{Read, Seek, Write};
 
 use crate::wallet::chacha20;

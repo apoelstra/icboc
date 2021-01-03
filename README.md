@@ -84,7 +84,6 @@ updated to reflect the unspent output information, as
      (after): 0000000000000000024068e6d589797e2b1d9a52498c65b5ef5600caedb37aee
         user: apoelstra@home
         note: payment for whats-its-contract
-                                            
 
 
 ## Version 1

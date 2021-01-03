@@ -17,8 +17,10 @@
 //! Abstract API for communicating with the device
 //!
 
+use miniscript::{self, bitcoin};
 use miniscript::bitcoin::secp256k1;
 use miniscript::bitcoin::util::bip32;
+use std::collections::HashMap;
 
 use crate::{constants, Error};
 use crate::util::parse_ledger_signature;
@@ -66,6 +68,59 @@ pub trait Dongle {
         }
     }
 
+    /// Obtains a bitcoin pubkey by querying the Ledger for a given BIP32 path
+    fn get_wallet_public_key(
+        &mut self,
+        key: &miniscript::DescriptorPublicKey,
+        key_cache: Option<&mut HashMap<bip32::DerivationPath, bitcoin::PublicKey>>,
+    ) -> Result<bitcoin::PublicKey, Error> {
+        match *key {
+            miniscript::DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key),
+            miniscript::DescriptorPublicKey::XPub(ref xkey) => {
+                assert!(xkey.wildcard == miniscript::descriptor::Wildcard::None);
+                let path = match xkey.origin {
+                    Some((fingerprint, ref originpath)) => {
+                        let our_fingerprint = self.get_master_xpub()?.fingerprint();
+                        if our_fingerprint != fingerprint {
+                            return Err(Error::NotOurKey {
+                                key_fingerprint: fingerprint,
+                                our_fingerprint: our_fingerprint,
+                            });
+                        }
+
+                        originpath.extend(&xkey.derivation_path)
+                    },
+                    None => xkey.derivation_path.clone(),
+                };
+
+                if let Some(ref cache) = key_cache {
+                    if let Some(entry) = cache.get(&path) {
+                        return Ok(*entry);
+                    }
+                }
+                let ret_key = self.get_public_key(&path, false).map(|wpk| wpk.public_key)?;
+                if let Some(cache) = key_cache {
+                    cache.insert(path, ret_key);
+                }
+                Ok(ret_key)
+            },
+        }
+    }
+
+    /// Gets the BIP32 fingerprint of the device's master key
+    fn get_master_xpub(&mut self) -> Result<bip32::ExtendedPubKey, Error> {
+        let master_wpk = self.get_public_key(&[], false)?;
+        let master_xpub = bip32::ExtendedPubKey {
+            network: bitcoin::Network::Bitcoin,
+            depth: 0,
+            parent_fingerprint: Default::default(),
+            child_number: bip32::ChildNumber::Normal { index: 0 },
+            public_key: master_wpk.public_key,
+            chain_code: master_wpk.chain_code[..].into(),
+        };
+        Ok(master_xpub)
+    }
+
     /// Query the device to sign an arbitrary message
     fn sign_message<P: AsRef<[bip32::ChildNumber]>>(
         &mut self,
@@ -99,17 +154,6 @@ pub trait Dongle {
     }
 
 /*
-    /// Query the device for up to 255 random bytes
-    fn get_random(&mut self, n: u8) -> Result<Vec<u8>, Error> {
-        let command = message::GetRandom::new(n);
-        let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
-            Ok(rev)
-        } else {
-            Err(Error::ApduBadStatus(sw))
-        }
-    }
-
     /// Query the device for a trusted input
     fn get_trusted_input(&mut self, tx: &Transaction, vout: u32) -> Result<Vec<u8>, Error> {
         let command = message::GetTrustedInput::new(tx, vout, constants::apdu::ledger::MAX_APDU_SIZE);

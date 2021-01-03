@@ -140,7 +140,7 @@ fn encode_marking_cutpoints<'a, T>(data: &T, buf: &'a mut Vec<u8>, cuts: &mut Ve
 
 /// Wrapper around `encode_marking_cutpoint` that encodes a Transaction correctly
 pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Copied structure from rust-bitcoin transaction.rs, with TxIn and TxOut unrolled
@@ -171,7 +171,7 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
 /// Wrapper around `encode_marking_cutpoint` that encodes a Spend's inputs correctly
 /// No segwit support
 pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // This is quite different from the Bitcoin format as we have to replace some
@@ -197,7 +197,7 @@ pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size:
 
 /// Wrapper around `encode_marking_cutpoint` that encodes a Spend's outputs correctly
 pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Encode outputs

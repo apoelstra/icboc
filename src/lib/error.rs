@@ -48,6 +48,11 @@ pub enum Error {
     FromUtf8(#[from] string::FromUtf8Error),
     #[error("miniscript")]
     Miniscript(#[from] miniscript::Error),
+    #[error("not our key (fingerprint {key_fingerprint} vs our fingerprint {our_fingerprint})")]
+    NotOurKey {
+        our_fingerprint: bitcoin::util::bip32::Fingerprint,
+        key_fingerprint: bitcoin::util::bip32::Fingerprint,
+    },
     #[error("hidapi")]
     Hid(#[from] hidapi::HidError),
     #[error("device replied to {apdu:?} with bad status code {status:04X}")]
@@ -67,6 +72,5 @@ pub enum Error {
     UserRefusedSignMessage,
     #[error("unexpected end-of-data")]
     UnexpectedEof,
-
 }
 

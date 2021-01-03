@@ -18,7 +18,7 @@
 //!
 
 use miniscript::bitcoin::hashes::Hash;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
 
 // Largest item we serialize, a Utxo structure, is 84 bytes
@@ -151,7 +151,7 @@ impl<T: Eq + std::hash::Hash + Serialize> Serialize for HashSet<T> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "writing vector of length {} exceeded max {} (type {})",
+                    "writing set of length {} exceeded max {} (type {})",
                     len32,
                     MAX_VEC_ELEMS,
                     std::any::type_name::<Self>(),
@@ -172,7 +172,7 @@ impl<T: Eq + std::hash::Hash + Serialize> Serialize for HashSet<T> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "reading vector of length {} exceeded max {} (type {})",
+                    "reading set of length {} exceeded max {} (type {})",
                     len32,
                     MAX_VEC_ELEMS,
                     std::any::type_name::<Self>(),
@@ -187,6 +187,52 @@ impl<T: Eq + std::hash::Hash + Serialize> Serialize for HashSet<T> {
     }
 }
 
+impl<T: Eq + std::hash::Hash + Serialize, V: Serialize> Serialize for HashMap<T, V> {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        let len32: u32 = self.len() as u32;
+        if self.len() > MAX_VEC_ELEMS as usize {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "writing map of length {} exceeded max {} (type {})",
+                    len32,
+                    MAX_VEC_ELEMS,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+        len32.write_to(&mut w)?;
+        for (t, v) in self {
+            t.write_to(&mut w)?;
+            v.write_to(&mut w)?;
+        }
+        Ok(())
+    }
+
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        let len32: u32 = Serialize::read_from(&mut r)?;
+        let mut ret = HashMap::with_capacity(len32 as usize);
+        if len32 > MAX_VEC_ELEMS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "reading map of length {} exceeded max {} (type {})",
+                    len32,
+                    MAX_VEC_ELEMS,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+
+        for _ in 0..len32 {
+            ret.insert(
+                Serialize::read_from(&mut r)?,
+                Serialize::read_from(&mut r)?,
+            );
+        }
+        Ok(ret)
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -204,7 +250,7 @@ mod tests {
         ];
 
         let mut ser = vec![];
-        data.write_to(&mut ser);
+        data.write_to(&mut ser).expect("writing");
         let read: Vec<OutPoint> = Serialize::read_from(&ser[..]).expect("read");
         assert_eq!(data, read);
     }

@@ -17,7 +17,7 @@ byteorder = "1.0"
 getrandom = { version = "0.2", features = [ "std" ] }
 jsonrpc = { version = "0.11", path = "../../rust-bitcoin/rust-jsonrpc/newrpc" }
 hidapi = "1.2"
-miniscript = "4.0"
+miniscript = { version = "4.0", path = "../../rust-bitcoin/miniscript/2020-12--hardened-wildcard" }
 shellexpand = "2.0"
 thiserror = "1.0"
 structopt = "0.3"

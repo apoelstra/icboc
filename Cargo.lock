@@ -220,9 +220,7 @@ checksum = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
 
 [[package]]
 name = "miniscript"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "352de731b9b53309c80dfe6f66b5c6b065b6d07f5528694a444ea7a982aec581"
+version = "4.0.3"
 dependencies = [
  "bitcoin",
 ]

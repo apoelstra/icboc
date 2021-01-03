@@ -23,20 +23,15 @@
 
 use anyhow::Context;
 use icboc::Dongle;
-use miniscript::bitcoin;
 use miniscript::bitcoin::hashes::{Hash, sha256};
 use miniscript::bitcoin::util::bip32;
-use std::{env, io};
-use std::io::{BufRead, Write};
 use structopt::StructOpt;
-
-use jsonrpc;
 
 /// Special message which has a very recognizeable pattern when
 /// displayed on the Ledger "sign this message?" screen
 pub const KEYSIG_MESSAGE: [u8; 32] = [
     0xb6, 0x02, 0xc8, 0x35, 0x8a, 0x73, 0xee, 0xb1, 0x3c, 0xfd, 0x3f, 0x3c, 0xfa, 0x16, 0xfe, 0x38,
-    0xfa, 0x08, 0x37, 0x03, 0xa8, 0x87, 0x47, 0xaf, 0x7b, 0xd6, 0xe0, 0x4c, 0x54, 0x0e, 0xef, 0x1b, 
+    0xfa, 0x08, 0x37, 0x03, 0xa8, 0x87, 0x47, 0xaf, 0x7b, 0xd6, 0xe0, 0x4c, 0x54, 0x0e, 0xef, 0x1b,
 ];
 
 /// Path on which to request the signature
@@ -51,16 +46,6 @@ pub const KEYSIG_PATH: [bip32::ChildNumber; 2] = [
 
 mod commands;
 mod rpc;
-
-/// Prompt the user for some string data
-fn user_prompt(prompt: &str) -> String {
-    print!("{}: ", prompt);
-    io::stdout().flush().expect("flushing stdout");
-    let stdin = io::stdin();
-    let lock = stdin.lock();
-    let line_res = lock.lines().next().expect("getting next line from stdin");
-    line_res.expect("reading from stdin")
-}
 
 /// Entry point
 fn main() -> anyhow::Result<()> {
@@ -81,11 +66,11 @@ fn main() -> anyhow::Result<()> {
     println!("Found dongle. Firmware version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
 
     // Get an encryption key for the wallet
-    let secp = bitcoin::secp256k1::Secp256k1::new();
     let sig = dongle.sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)?;
     let wallet_key: [u8; 32] = sha256::Hash::hash(&sig.serialize_compact()).into_inner();
 
-    opts.command.execute(&opts.wallet_file, wallet_key)?;
+    // Do the user's bidding
+    opts.command.execute(&opts.wallet_file, wallet_key, &mut dongle)?;
 
 /*
     // Decide what to do

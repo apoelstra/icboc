@@ -232,8 +232,8 @@ pub struct WalletPublicKey {
     pub public_key: bitcoin::PublicKey,
     /// The base58-encoded address corresponding to the public key
     pub b58_address: String,
-    /// The BIP32 chaincode associated to this key
-    pub chaincode: [u8; 32]
+    /// The BIP32 chain code associated to this key
+    pub chain_code: [u8; 32]
 }
 
 impl Response for WalletPublicKey {
@@ -242,7 +242,10 @@ impl Response for WalletPublicKey {
         if 2 + pk_len > data.len() {
             return Err(Error::UnexpectedEof);
         }
-        let pk = bitcoin::PublicKey::from_slice(&data[1..1+pk_len])?;
+        let mut pk = bitcoin::PublicKey::from_slice(&data[1..1+pk_len])?;
+        // The ledger will return an uncompressed public key, but actually
+        // derives addresses using compressed keys
+        pk.compressed = true;
 
         let addr_len = data[1 + pk_len] as usize;
         let expected_len = 2 + pk_len + addr_len + 32;
@@ -258,9 +261,9 @@ impl Response for WalletPublicKey {
         let mut ret = WalletPublicKey {
             public_key: pk,
             b58_address: addr,
-            chaincode: [0; 32]
+            chain_code: [0; 32]
         };
-        ret.chaincode.clone_from_slice(&data[2 + pk_len + addr_len..]);
+        ret.chain_code.clone_from_slice(&data[2 + pk_len + addr_len..]);
         Ok(ret)
     }
 }
