@@ -411,7 +411,6 @@ impl Command for SignMessageSign {
     }
 }
 
-/*
 /// GET RANDOM message
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetRandom {
@@ -439,11 +438,7 @@ impl Command for GetRandom {
             None
         } else {
             self.sent = true;
-            Some(vec![
-                apdu::ledger::BTCHIP_CLA,
-                apdu::ledger::ins::GET_RANDOM,
-                0x00, 0x00, self.count
-            ])
+            Some(vec![ledger::BTCHIP_CLA, Instruction::GetRandom.into_u8(), 0, 0, self.count])
         }
     }
 
@@ -463,7 +458,7 @@ impl Command for GetRandom {
     }
 }
 
-
+/*
 /// GET RANDOM message
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetTrustedInput {

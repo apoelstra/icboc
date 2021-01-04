@@ -147,6 +147,7 @@ impl Wallet {
     pub fn scan_block(
         &mut self,
         block: &bitcoin::Block,
+        height: u64,
         cache: &mut ScriptPubkeyCache,
     ) -> Result<(HashSet<Txo>, HashSet<Txo>), Error> {
         let mut received = HashSet::new();
@@ -162,6 +163,8 @@ impl Wallet {
                         outpoint: outpoint,
                         value: output.value,
                         spent: None,
+                        height: height,
+                        spent_height: None,
                     };
                     received.insert(new_txo);
                     self.txos.insert(outpoint, new_txo);
@@ -171,6 +174,7 @@ impl Wallet {
             for input in &tx.input {
                 if let Some(txo) = self.txos.get_mut(&input.previous_output) {
                     txo.spent = Some(tx.txid());
+                    txo.spent_height = Some(height);
                     spent.insert(*txo);
                 }
             }
@@ -186,10 +190,7 @@ impl Wallet {
     }
 
     /// Write out the wallet in encrypted form
-    pub fn write<W: Write>(&self, w: W, key: [u8; 32]) -> io::Result<()> {
-        let mut nonce = [0u8; 12];
-        getrandom::getrandom(&mut nonce)?;
-
+    pub fn write<W: Write>(&self, w: W, key: [u8; 32], nonce: [u8; 12]) -> io::Result<()> {
         let mut writer = self::crypt::CryptWriter::new(key, nonce, w);
         writer.init()?;
         self.write_to(&mut writer)?;
@@ -258,6 +259,10 @@ pub struct Txo {
     value: u64,
     /// If the TXO is spent, the txid that spent it
     spent: Option<bitcoin::Txid>,
+    /// Blockheight at which the UTXO was created
+    height: u64,
+    /// Blockheight at which the UTXO was spenta
+    spent_height: Option<u64>,
 }
 
 impl Txo {
@@ -281,14 +286,18 @@ impl fmt::Display for Txo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{{ outpoint: \"{}\", value: \"{}\", descriptor: {}, index: {}",
+            "{{ outpoint: \"{}\", value: \"{}\", height: {}, descriptor: {}, index: {}",
             self.outpoint,
             bitcoin::Amount::from_sat(self.value),
+            self.height,
             self.descriptor_idx,
             self.wildcard_idx,
         )?;
         if let Some(txid) = self.spent {
             write!(f, ", spent_by: \"{}\"", txid)?;
+        }
+        if let Some(height) = self.spent_height {
+            write!(f, ", spent_height: {}", height)?;
         }
         f.write_str(" }")
     }
@@ -301,6 +310,8 @@ impl Serialize for Txo {
         self.outpoint.write_to(&mut w)?;
         self.value.write_to(&mut w)?;
         self.spent.unwrap_or(Default::default()).write_to(&mut w)?;
+        self.height.write_to(&mut w)?;
+        self.spent_height.unwrap_or(Default::default()).write_to(&mut w)?;
         Ok(())
     }
 
@@ -316,6 +327,15 @@ impl Serialize for Txo {
                     None
                 } else {
                     Some(txid)
+                }
+            },
+            height: Serialize::read_from(&mut r)?,
+            spent_height: {
+                let height = Serialize::read_from(&mut r)?;
+                if height == 0 {
+                    None
+                } else {
+                    Some(height)
                 }
             },
         })

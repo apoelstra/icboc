@@ -68,6 +68,22 @@ pub trait Dongle {
         }
     }
 
+    /// Queries the device for 12 random bytes
+    fn get_random_nonce(&mut self) -> Result<[u8; 12], Error> {
+        let command = message::GetRandom::new(12);
+        let (sw, rev) = self.exchange(command)?;
+        if sw == constants::apdu::ledger::sw::OK {
+            let mut res = [0; 12];
+            res.copy_from_slice(&rev[..]);
+            Ok(res)
+        } else {
+            Err(Error::ResponseBadStatus {
+                apdu: constants::apdu::ledger::Instruction::GetRandom,
+                status: sw,
+            })
+        }
+    }
+
     /// Obtains a bitcoin pubkey by querying the Ledger for a given BIP32 path
     fn get_wallet_public_key(
         &mut self,

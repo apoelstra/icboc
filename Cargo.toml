@@ -14,11 +14,10 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.0"
-getrandom = { version = "0.2", features = [ "std" ] }
 jsonrpc = { version = "0.11", path = "../../rust-bitcoin/rust-jsonrpc/newrpc" }
 hidapi = "1.2"
+home = "0.5"
 miniscript = { version = "4.0", path = "../../rust-bitcoin/miniscript/2020-12--hardened-wildcard", features = ["use-serde"] }
-shellexpand = "2.0"
 thiserror = "1.0"
 structopt = "0.3"
 

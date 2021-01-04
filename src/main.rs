@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
         .context("finding dongle")?;
     let version = dongle.get_firmware_version()
         .context("getting firmware version")?;
-    println!("Found dongle. Firmware version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
+    println!("Found dongle. Bitcoin app version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
 
     // Get an encryption key for the wallet
     let sig = dongle.sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)?;

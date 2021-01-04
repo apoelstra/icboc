@@ -53,6 +53,10 @@ pub enum Command {
         #[structopt(name="range_max")]
         hi: Option<u32>,
     },
+    /// List every TXO known by the wallet
+    ListAll,
+    /// List every unsepent TXO known by the wallet
+    ListUnspent,
     /// Scans the blockchain to learn about new coins
     Rescan {
         /// Height at which to scan from. Defaults to the height the
@@ -96,12 +100,13 @@ impl Command {
             wallet: &Wallet,
             wallet_file: P,
             wallet_key: [u8; 32],
+            wallet_nonce: [u8; 12],
         ) -> anyhow::Result<()> {
             let wallet_name = wallet_file.as_ref().to_string_lossy().into_owned();
             // Write out wallet
             let tmp_name = wallet_name.clone() + ".tmp";
             let fh = fs::File::create(&tmp_name)?;
-            wallet.write(fh, wallet_key)
+            wallet.write(fh, wallet_key, wallet_nonce)
                 .with_context(|| format!("writing to wallet {}", wallet_name))?;
             // Above line took `fh` by value, dropping it, so we can safely rename here
             fs::rename(&tmp_name, &wallet_file)
@@ -110,6 +115,9 @@ impl Command {
         }
 
         let wallet_name = wallet_file.as_ref().to_string_lossy();
+        let wallet_nonce = dongle.get_random_nonce()
+            .context("getting random encryption IV from device")?;
+println!("{:?}", wallet_nonce);
 
         let mut wallet;
         if let Command::Init { .. } = self {
@@ -163,7 +171,7 @@ impl Command {
                 }
 
                 let fh = fs::File::create(&wallet_file)?;
-                wallet.write(fh, wallet_key)
+                wallet.write(fh, wallet_key, wallet_nonce)
                     .with_context(|| format!("writing to wallet {}", wallet_name))?;
                 println!("Initialized wallet at {}.", wallet_name);
                 return Ok(());
@@ -198,6 +206,16 @@ impl Command {
                 }
                 println!("Imported {} new addresses. You should now call `rescan`.", n_added);
             },
+            Command::ListAll => {
+                for txo in wallet.txos.values() {
+                    println!("{}", txo);
+                }
+            },
+            Command::ListUnspent => {
+                for txo in wallet.txos.values().filter(|txo| txo.spending_txid().is_none()) {
+                    println!("{}", txo);
+                }
+            },
             Command::Rescan { from } => {
                 let mut cache = wallet.script_pubkey_cache(&mut *dongle)
                     .context("getting scriptpubkeys from wallet")?;
@@ -213,12 +231,12 @@ impl Command {
 
                     if height > 0 && height % 1000 == 0 {
                         wallet.block_height = height;
-                        save_out(&wallet, &wallet_file, wallet_key)
+                        save_out(&wallet, &wallet_file, wallet_key, wallet_nonce)
                             .with_context(|| format!("saving wallet at height {}", height))?;
                         println!("Height {:7}: {} {:?}", height, block.block_hash(), std::time::Instant::now());
                     }
 
-                    let (received, spent) = wallet.scan_block(&block, &mut cache)
+                    let (received, spent) = wallet.scan_block(&block, height, &mut cache)
                         .with_context(|| format!("updating wallet from block {}", height))?;
                     for txo in received {
                         println!("received {}", txo);
@@ -232,11 +250,12 @@ impl Command {
                         max_height = bitcoind.getblockcount().context("getting block count")?;
                     }
                 }
+                wallet.block_height = height;
             },
         }
 
         // Write out wallet
-        save_out(&wallet, wallet_file, wallet_key)
+        save_out(&wallet, wallet_file, wallet_key, wallet_nonce)
     }
 }
 

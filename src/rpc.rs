@@ -1,10 +1,12 @@
 
 use anyhow::{self, Context};
 use jsonrpc::{self, arg};
+use home;
 use miniscript::bitcoin;
 use miniscript::bitcoin::hashes::{hex, sha256d};
-use shellexpand;
+use std::borrow::Cow;
 use std::fs;
+use std::path::Path;
 use std::time::Duration;
 
 use crate::commands::Options;
@@ -16,9 +18,17 @@ pub struct Bitcoind {
 impl Bitcoind {
     /// Connect to a bitcoind over JSONRPC
     pub fn connect(opts: &Options) -> anyhow::Result<Bitcoind> {
-        let cookie_file = shellexpand::full(&opts.rpccookie)?;
+        let cookie_file = if &opts.rpccookie.as_bytes()[0..2] == b"~/" {
+            Cow::Owned(
+                home::home_dir()
+                    .expect("finding home directory")
+                    .join(&opts.rpccookie[2..])
+            )
+        } else {
+            Cow::Borrowed(Path::new(&opts.rpccookie))
+        };
         let userpass = fs::read_to_string(&*cookie_file)
-            .with_context(|| format!("opening file {}", cookie_file))?;
+            .with_context(|| format!("opening file {}", cookie_file.to_string_lossy()))?;
         let transport = jsonrpc::simple_http::Builder::new()
             .timeout(Duration::from_millis(1000))
             .cookie_auth(&userpass)
