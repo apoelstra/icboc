@@ -53,8 +53,8 @@ fn main() -> anyhow::Result<()> {
 
     // Talk to the bitcoind
     let bitcoind = rpc::Bitcoind::connect(&opts)?;
-    let n: usize = bitcoind.getblockcount()?;
-    println!("{} blocks" , n);
+    let n = bitcoind.getblockcount()?;
+    println!("Connected to bitcoind. Block count: {}" , n);
 
     // Contact device and run GET FIRMWARE to sanity check it
     let hid_api = icboc::hid::Api::new()
@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
     let wallet_key: [u8; 32] = sha256::Hash::hash(&sig.serialize_compact()).into_inner();
 
     // Do the user's bidding
-    opts.command.execute(&opts.wallet_file, wallet_key, &mut dongle)?;
+    opts.command.execute(&opts.wallet_file, wallet_key, &bitcoind, &mut dongle)?;
 
 /*
     // Decide what to do

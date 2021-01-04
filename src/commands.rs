@@ -20,11 +20,12 @@
 use anyhow::{self, Context};
 use icboc::{Dongle, Wallet};
 use icboc::ledger::NanoS;
-use miniscript::DescriptorTrait;
-use miniscript::bitcoin::Network;
+use miniscript::bitcoin;
 use std::fs;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
+
+use crate::rpc;
 
 #[derive(StructOpt)]
 pub enum Command {
@@ -34,10 +35,12 @@ pub enum Command {
         #[structopt(short, long)]
         force: bool,
     },
+    /// Gets information about the wallet or objects it contains
     Info {
         #[structopt(name="what")]
         what: Option<String>,
     },
+    /// Imports a descriptor into the wallet
     ImportDescriptor {
         /// The descriptor to import
         #[structopt(name="descriptor")]
@@ -49,6 +52,12 @@ pub enum Command {
         /// For ranged descriptors, last index to use
         #[structopt(name="range_max")]
         hi: Option<u32>,
+    },
+    /// Scans the blockchain to learn about new coins
+    Rescan {
+        /// Height at which to scan from. Defaults to the height the
+        /// wallet most recently scanned to, minus 100.
+        from: Option<u64>,
     },
 }
 
@@ -80,8 +89,26 @@ impl Command {
         self,
         wallet_file: P,
         wallet_key: [u8; 32],
+        bitcoind: &rpc::Bitcoind,
         dongle: &mut NanoS,
     ) -> anyhow::Result<()> {
+        fn save_out<P: AsRef<Path>>(
+            wallet: &Wallet,
+            wallet_file: P,
+            wallet_key: [u8; 32],
+        ) -> anyhow::Result<()> {
+            let wallet_name = wallet_file.as_ref().to_string_lossy().into_owned();
+            // Write out wallet
+            let tmp_name = wallet_name.clone() + ".tmp";
+            let fh = fs::File::create(&tmp_name)?;
+            wallet.write(fh, wallet_key)
+                .with_context(|| format!("writing to wallet {}", wallet_name))?;
+            // Above line took `fh` by value, dropping it, so we can safely rename here
+            fs::rename(&tmp_name, &wallet_file)
+                .with_context(|| format!("renaming {} to {}", tmp_name, wallet_name))?;
+            Ok(())
+        }
+
         let wallet_name = wallet_file.as_ref().to_string_lossy();
 
         let mut wallet;
@@ -92,7 +119,36 @@ impl Command {
                 .with_context(|| format!("opening wallet {}", wallet_name))?;
             wallet = Wallet::from_reader(fh, wallet_key)
                 .with_context(|| format!("reading wallet {}", wallet_name))?;
-            println!("Opened wallet at {} with {} descriptors and {} txos.", wallet_name, wallet.descriptors.len(), wallet.txos.len());
+            println!(
+                "Opened wallet at {} with {} descriptors and {} txos.",
+                wallet_name,
+                wallet.descriptors.len(),
+                wallet.txos.len(),
+            );
+            let mut full_balance = 0;
+            if !wallet.descriptors.is_empty() {
+                println!("Descriptors:");
+                for (n, desc) in wallet.descriptors() {
+                    let txos = wallet.txos_for(n);
+                    let mut n_spent = 0;
+                    let mut balance = 0;
+                    for txo in &txos {
+                        if txo.spending_txid().is_some() {
+                            n_spent += 1;
+                        } else {
+                            balance += txo.value();
+                        }
+                    }
+                    println!("  {:4} {}", n, desc.desc);
+                    println!("       Range: {}-{}", desc.low, desc.high - 1);
+                    println!("       TXOs: {} total, {} spent", txos.len(), n_spent);
+                    println!("       Balance: {}", bitcoin::Amount::from_sat(balance));
+                    println!("");
+                    full_balance += balance;
+                }
+            }
+            println!("Wallet balance: {}", bitcoin::Amount::from_sat(full_balance));
+            println!("");
         }
 
         match self {
@@ -116,7 +172,7 @@ impl Command {
                 if let Some(ref thing) = *what {
                     // TODO
                 } else {
-                    println!("Assuming height {} is confirmed and will not rescan these blocks except when importing descriptors.", wallet.block_height);
+                    println!("Last rescan was to height {}.", wallet.block_height);
                     let master_xpub = dongle.get_master_xpub()?;
                     println!("Dongle master xpub: {}", master_xpub);
                     println!("Dongle master fingerprint: {}", master_xpub.fingerprint());
@@ -142,18 +198,45 @@ impl Command {
                 }
                 println!("Imported {} new addresses. You should now call `rescan`.", n_added);
             },
+            Command::Rescan { from } => {
+                let mut cache = wallet.script_pubkey_cache(&mut *dongle)
+                    .context("getting scriptpubkeys from wallet")?;
+
+                let mut height = from.unwrap_or(wallet.block_height.saturating_sub(100));
+                let mut max_height = bitcoind.getblockcount()
+                    .context("getting initial block count")?;
+
+                println!("Scanning from block {}. Current height: {}", height, max_height);
+                while height < max_height {
+                    let block = bitcoind.getblock(height)
+                        .with_context(|| format!("fetching block {}", height))?;
+
+                    if height > 0 && height % 1000 == 0 {
+                        wallet.block_height = height;
+                        save_out(&wallet, &wallet_file, wallet_key)
+                            .with_context(|| format!("saving wallet at height {}", height))?;
+                        println!("Height {:7}: {} {:?}", height, block.block_hash(), std::time::Instant::now());
+                    }
+
+                    let (received, spent) = wallet.scan_block(&block, &mut cache)
+                        .with_context(|| format!("updating wallet from block {}", height))?;
+                    for txo in received {
+                        println!("received {}", txo);
+                    }
+                    for txo in spent {
+                        println!("spent {}", txo);
+                    }
+
+                    height += 1;
+                    if height == max_height {
+                        max_height = bitcoind.getblockcount().context("getting block count")?;
+                    }
+                }
+            },
         }
 
         // Write out wallet
-        let tmp_name = wallet_file.as_ref().to_string_lossy().into_owned() + ".tmp";
-        let fh = fs::File::create(&tmp_name)?;
-        wallet.write(fh, wallet_key)
-            .with_context(|| format!("writing to wallet {}", wallet_name))?;
-        // Above line took `fh` by value, dropping it, so we can safely rename here
-        fs::rename(&tmp_name, &wallet_file)
-            .with_context(|| format!("renaming {} to {}", tmp_name, wallet_name))?;
-
-        Ok(())
+        save_out(&wallet, wallet_file, wallet_key)
     }
 }
 

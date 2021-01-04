@@ -21,18 +21,25 @@ mod chacha20;
 mod crypt;
 mod serialize;
 
-use miniscript::{self, TranslatePk2};
+use miniscript::{self, DescriptorTrait, TranslatePk2};
 use miniscript::bitcoin::{self, util::bip32};
 
 use self::serialize::Serialize;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::io::{self, Read, Seek, Write};
 use std::str::FromStr;
 
 use crate::{Dongle, Error};
 
 const MAX_DESCRIPTOR_LEN: u32 = 64 * 1024;
+
+/// Opaque cache of all scriptpubkeys the wallet is tracking
+pub struct ScriptPubkeyCache {
+    /// Scriptpubkeys we control
+    spks: HashMap<bitcoin::Script, (u32, u32)>,
+}
 
 /// Wallet structure
 #[derive(Default)]
@@ -42,7 +49,7 @@ pub struct Wallet {
     /// List of descriptors tracked by the wallet
     pub descriptors: Vec<Descriptor>,
     /// Set of TXOs owned by the wallet
-    pub txos: HashSet<Txo>,
+    pub txos: HashMap<bitcoin::OutPoint, Txo>,
     /// Cache of keys we've gotten from the dongel
     pub key_cache: HashMap<bip32::DerivationPath, bitcoin::PublicKey>,
 }
@@ -50,6 +57,24 @@ pub struct Wallet {
 impl Wallet {
     /// Construct a new empty wallet
     pub fn new() -> Self { Self::default() }
+
+    /// Helper fuction that caches keys from the Ledger and computes the
+    /// scriptpubkey corresponding to an instantiated descriptor
+    fn cache_key<D: Dongle>(
+        key_cache: &mut HashMap<bip32::DerivationPath, bitcoin::PublicKey>,
+        desc: &miniscript::Descriptor<miniscript::DescriptorPublicKey>,
+        index: u32,
+        dongle: &mut D,
+    ) -> Result<bitcoin::Script, Error> {
+        let dongle = RefCell::new(&mut *dongle);
+        let key_cache = RefCell::new(key_cache);
+
+        let copy = desc.derive(index);
+        let inst = copy.translate_pk2(
+            |key| dongle.borrow_mut().get_wallet_public_key(key, &mut *key_cache.borrow_mut())
+        )?;
+        Ok(inst.script_pubkey())
+    }
 
     /// Adds a new descriptor to the wallet. Returns the number of new keys
     /// (i.e. it not covered by descriptors already in wallet) added.
@@ -73,14 +98,7 @@ impl Wallet {
         for i in low..high {
             if !existing_indices.contains(&i) {
                 added_new += 1;
-                // Cache the new key
-                let dongle = RefCell::new(&mut *dongle);
-                let key_cache = RefCell::new(&mut self.key_cache);
-
-                let copy = desc.derive(i);
-                copy.translate_pk2(
-                    |key| dongle.borrow_mut().get_wallet_public_key(key, Some(*key_cache.borrow_mut()))
-                )?;
+                Wallet::cache_key(&mut self.key_cache, &desc, i, &mut *dongle)?;
             }
         }
 
@@ -94,6 +112,71 @@ impl Wallet {
         }
 
         Ok(added_new)
+    }
+
+    /// Iterator over all descriptors in the wallet, and their index
+    pub fn descriptors<'a>(&'a self) -> impl Iterator<Item=(usize, &'a Descriptor)> {
+        self.descriptors.iter().enumerate()
+    }
+
+    /// Gets the set of TXOs associated with a particular descriptor
+    pub fn txos_for<'a>(&'a self, descriptor_idx: usize) -> HashSet<&'a Txo> {
+        self.txos.values().filter(|txo| txo.descriptor_idx as usize == descriptor_idx).collect()
+    }
+
+    /// Returns an opaque object the wallet can use to recognize its own scriptpubkeys
+    pub fn script_pubkey_cache<D: Dongle>(
+        &mut self,
+        dongle: &mut D,
+    ) -> Result<ScriptPubkeyCache, Error> {
+        let mut map = HashMap::new();
+        for (didx, desc) in self.descriptors.iter().enumerate() {
+            for widx in desc.low..desc.high {
+                let spk = Wallet::cache_key(&mut self.key_cache, &desc.desc, widx, &mut *dongle)?;
+                map.insert(spk, (didx as u32, widx as u32));
+            }
+        }
+
+        Ok(ScriptPubkeyCache {
+            spks: map,
+        })
+    }
+
+    /// Scans a block for wallet-relevant information. Returns two sets, one of
+    /// received coins and one of spent coins
+    pub fn scan_block(
+        &mut self,
+        block: &bitcoin::Block,
+        cache: &mut ScriptPubkeyCache,
+    ) -> Result<(HashSet<Txo>, HashSet<Txo>), Error> {
+        let mut received = HashSet::new();
+        let mut spent = HashSet::new();
+
+        for tx in &block.txdata {
+            for (vout, output) in tx.output.iter().enumerate() {
+                if let Some((didx, widx)) = cache.spks.get(&output.script_pubkey) {
+                    let outpoint = bitcoin::OutPoint::new(tx.txid(), vout as u32);
+                    let new_txo = Txo {
+                        descriptor_idx: *didx,
+                        wildcard_idx: *widx,
+                        outpoint: outpoint,
+                        value: output.value,
+                        spent: None,
+                    };
+                    received.insert(new_txo);
+                    self.txos.insert(outpoint, new_txo);
+                }
+            }
+
+            for input in &tx.input {
+                if let Some(txo) = self.txos.get_mut(&input.previous_output) {
+                    txo.spent = Some(tx.txid());
+                    spent.insert(*txo);
+                }
+            }
+        }
+
+        Ok((received, spent))
     }
 
     /// Read a wallet in encrypted form
@@ -163,18 +246,52 @@ impl Serialize for Descriptor {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Txo {
     /// Index into the wallet-global descriptor array
     descriptor_idx: u32,
     /// If the descriptor has wildcards, index into it
     wildcard_idx: u32,
     /// Outpoint of the TXO
-    outpoint: miniscript::bitcoin::OutPoint,
+    outpoint: bitcoin::OutPoint,
     /// Value of the TXO, in satoshis
     value: u64,
     /// If the TXO is spent, the txid that spent it
-    spent: Option<miniscript::bitcoin::Txid>,
+    spent: Option<bitcoin::Txid>,
+}
+
+impl Txo {
+    /// Accessor for the outpoint of this TXO
+    pub fn outpoint(&self) -> bitcoin::OutPoint {
+        self.outpoint
+    }
+
+    /// Accessor for the value of this TXO
+    pub fn value(&self) -> u64 {
+        self.value
+    }
+
+    /// If this TXO has been spent, the txid that did it
+    pub fn spending_txid(&self) -> Option<bitcoin::Txid> {
+        self.spent
+    }
+}
+
+impl fmt::Display for Txo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{{ outpoint: \"{}\", value: \"{}\", descriptor: {}, index: {}",
+            self.outpoint,
+            bitcoin::Amount::from_sat(self.value),
+            self.descriptor_idx,
+            self.wildcard_idx,
+        )?;
+        if let Some(txid) = self.spent {
+            write!(f, ", spent_by: \"{}\"", txid)?;
+        }
+        f.write_str(" }")
+    }
 }
 
 impl Serialize for Txo {
@@ -195,7 +312,7 @@ impl Serialize for Txo {
             value: Serialize::read_from(&mut r)?,
             spent: {
                 let txid = Serialize::read_from(&mut r)?;
-                if txid == miniscript::bitcoin::Txid::default() {
+                if txid == bitcoin::Txid::default() {
                     None
                 } else {
                     Some(txid)

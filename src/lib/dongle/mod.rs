@@ -72,7 +72,7 @@ pub trait Dongle {
     fn get_wallet_public_key(
         &mut self,
         key: &miniscript::DescriptorPublicKey,
-        key_cache: Option<&mut HashMap<bip32::DerivationPath, bitcoin::PublicKey>>,
+        key_cache: &mut HashMap<bip32::DerivationPath, bitcoin::PublicKey>,
     ) -> Result<bitcoin::PublicKey, Error> {
         match *key {
             miniscript::DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key),
@@ -93,15 +93,11 @@ pub trait Dongle {
                     None => xkey.derivation_path.clone(),
                 };
 
-                if let Some(ref cache) = key_cache {
-                    if let Some(entry) = cache.get(&path) {
-                        return Ok(*entry);
-                    }
+                if let Some(entry) = key_cache.get(&path) {
+                    return Ok(*entry);
                 }
                 let ret_key = self.get_public_key(&path, false).map(|wpk| wpk.public_key)?;
-                if let Some(cache) = key_cache {
-                    cache.insert(path, ret_key);
-                }
+                key_cache.insert(path, ret_key);
                 Ok(ret_key)
             },
         }

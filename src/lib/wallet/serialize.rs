@@ -70,8 +70,8 @@ impl Serialize for u64 {
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let lo: u32 = Serialize::read_from(&mut r)?;
-        let hi: u32 = Serialize::read_from(&mut r)?;
-        Ok((lo as u64) + (hi as u64) << 32)
+        let hi: u32 = Serialize::read_from(r)?;
+        Ok((lo as u64) + ((hi as u64) << 32))
     }
 }
 

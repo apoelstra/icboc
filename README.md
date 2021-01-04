@@ -2,25 +2,19 @@
 
 cargo update -p cc --precise "1.0.61" --verbose
 
-# ICBOC
+# ICBOC 3D
 
-ICBOC, or "Ice Cold Box of Coins", was originally named Icebox, but it turned
-out that this collided with the pre-existing [Icebox project](https://github.com/ConsenSys/icebox).
+ICBOC 3D, or "Ice Cold Box of Coins Descriptors Descriptors Descriptors",
+was originally named Icebox, but it turned out that this collided with the
+pre-existing [Icebox project](https://github.com/ConsenSys/icebox).
 The current name was chosen to be awkward enough to avoid collisions, while
-still sounding kinda like "icebox".
+still sounding kinda like "icebox". In 2021, it was rewritten to work with
+descriptors, and the suffix 3D was added.
 
-ICBOC is a cold wallet designed to work with the Ledger Nano S on an offline
+ICBOC 3D is a cold wallet designed to work with the Ledger Nano S on an offline
 computer. It is designed for power users willing to do a fair bit of work to
 send transactions. Currently it is under development and it is strongly
 discouraged to use it.
-
-It is designed around the principle that each address corresponds to one
-payment, and while address should appear uniformly random, the wallet should
-tie this information to the address in a verifiable, untamperable way.
-
-To protect privacy, each wallet is created with support for a fixed number
-of addresses. Initially an encrypted block of zeroes is stored in place of
-the address information so that the size of the wallet file never changes.
 
 All keys are stored on the dongle; what the "wallet" stores on the PC is a
 database of information about addresses that have been used.
