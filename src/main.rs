@@ -1,5 +1,5 @@
 // ICBOC 3D
-// Written in 2020 by
+// Written in 2021 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -23,36 +23,14 @@
 
 use anyhow::Context;
 use icboc::Dongle;
-use miniscript::bitcoin::hashes::{Hash, sha256};
-use miniscript::bitcoin::util::bip32;
-use structopt::StructOpt;
-
-/// Special message which has a very recognizeable pattern when
-/// displayed on the Ledger "sign this message?" screen
-pub const KEYSIG_MESSAGE: [u8; 32] = [
-    0xb6, 0x02, 0xc8, 0x35, 0x8a, 0x73, 0xee, 0xb1, 0x3c, 0xfd, 0x3f, 0x3c, 0xfa, 0x16, 0xfe, 0x38,
-    0xfa, 0x08, 0x37, 0x03, 0xa8, 0x87, 0x47, 0xaf, 0x7b, 0xd6, 0xe0, 0x4c, 0x54, 0x0e, 0xef, 0x1b,
-];
-
-/// Path on which to request the signature
-///
-/// For some reason the Ledger does not display to the user what this path is,
-/// so it really doesn't matter, we just need to be consistent. But make half
-/// an effort to not collide with paths other applications might use.
-pub const KEYSIG_PATH: [bip32::ChildNumber; 2] = [
-    bip32::ChildNumber::Hardened { index: 0xABCD },
-    bip32::ChildNumber::Hardened { index: 0x1234 },
-];
 
 mod commands;
 mod rpc;
 
 /// Entry point
 fn main() -> anyhow::Result<()> {
-    let opts = commands::Options::from_args();
-
     // Talk to the bitcoind
-    let bitcoind = rpc::Bitcoind::connect(&opts)?;
+    let bitcoind = rpc::Bitcoind::connect("~/.bitcoin/.cookie")?;
     let n = bitcoind.getblockcount()?;
     println!("Connected to bitcoind. Block count: {}" , n);
 
@@ -62,15 +40,16 @@ fn main() -> anyhow::Result<()> {
     let mut dongle = icboc::ledger::NanoS::get(&hid_api)
         .context("finding dongle")?;
     let version = dongle.get_firmware_version()
-        .context("getting firmware version")?;
-    println!("Found dongle. Bitcoin app version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
-
-    // Get an encryption key for the wallet
-    let sig = dongle.sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)?;
-    let wallet_key: [u8; 32] = sha256::Hash::hash(&sig.serialize_compact()).into_inner();
+        .context("getting app version")?;
+    let master_xpub = dongle.get_master_xpub()
+        .context("getting master xpub")?;
+    println!("Found dongle.");
+    println!("    Bitcoin app version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
+    println!("    Master xpub: {}", master_xpub);
+    println!("    Master fingerprint: {}", master_xpub.fingerprint());
 
     // Do the user's bidding
-    opts.command.execute(&opts.wallet_file, wallet_key, &bitcoind, &mut dongle)?;
+    commands::execute_from_args(&bitcoind, &mut dongle)?;
 
 /*
     // Decide what to do

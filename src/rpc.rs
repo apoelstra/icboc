@@ -9,23 +9,21 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::commands::Options;
-
 pub struct Bitcoind {
     rpc_client: jsonrpc::Client,
 }
 
 impl Bitcoind {
     /// Connect to a bitcoind over JSONRPC
-    pub fn connect(opts: &Options) -> anyhow::Result<Bitcoind> {
-        let cookie_file = if &opts.rpccookie.as_bytes()[0..2] == b"~/" {
+    pub fn connect(rpccookie: &str) -> anyhow::Result<Bitcoind> {
+        let cookie_file = if &rpccookie.as_bytes()[0..2] == b"~/" {
             Cow::Owned(
                 home::home_dir()
                     .expect("finding home directory")
-                    .join(&opts.rpccookie[2..])
+                    .join(&rpccookie[2..])
             )
         } else {
-            Cow::Borrowed(Path::new(&opts.rpccookie))
+            Cow::Borrowed(Path::new(&rpccookie))
         };
         let userpass = fs::read_to_string(&*cookie_file)
             .with_context(|| format!("opening file {}", cookie_file.to_string_lossy()))?;

@@ -18,12 +18,12 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
-use miniscript::bitcoin::{self, Network, Transaction, SigHashType};
+use miniscript::bitcoin;
 use miniscript::bitcoin::util::bip32;
 use byteorder::{WriteBytesExt, BigEndian};
 use std::cmp;
 
-use crate::{constants, Error};
+use crate::Error;
 use crate::constants::apdu::ledger::{self, Instruction};
 /*
 use spend;

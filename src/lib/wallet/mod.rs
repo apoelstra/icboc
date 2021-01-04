@@ -1,5 +1,5 @@
 // ICBOC 3D
-// Written in 2020 by
+// Written in 2021 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -27,9 +27,12 @@ use miniscript::bitcoin::{self, util::bip32};
 use self::serialize::Serialize;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::io::{self, Read, Seek, Write};
-use std::str::FromStr;
+use std::{
+    cmp,
+    fmt,
+    io::{self, Read, Seek, Write},
+    str::FromStr,
+};
 
 use crate::{Dongle, Error};
 
@@ -247,6 +250,7 @@ impl Serialize for Descriptor {
     }
 }
 
+/// A (potentially spent) transaction output tracked by the wallet
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Txo {
     /// Index into the wallet-global descriptor array
@@ -265,10 +269,30 @@ pub struct Txo {
     spent_height: Option<u64>,
 }
 
+impl Ord for Txo {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        fn sort_key(obj: &Txo) -> impl Ord {
+            (obj.height, obj.descriptor_idx, obj.wildcard_idx, obj.outpoint)
+        }
+        sort_key(self).cmp(&sort_key(other))
+    }
+}
+
+impl PartialOrd for Txo {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Txo {
     /// Accessor for the outpoint of this TXO
     pub fn outpoint(&self) -> bitcoin::OutPoint {
         self.outpoint
+    }
+
+    /// Accessor for the height of this TXO
+    pub fn height(&self) -> u64 {
+        self.height
     }
 
     /// Accessor for the value of this TXO
