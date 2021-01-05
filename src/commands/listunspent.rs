@@ -18,7 +18,7 @@
 //!
 
 use crate::rpc;
-use icboc::Dongle;
+use icboc::{Dongle, TxoInfo};
 use miniscript::bitcoin;
 use serde::Deserialize;
 use std::path::Path;
@@ -40,24 +40,18 @@ impl super::Command for ListUnspent {
         _bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
-        let (key, _) = super::get_wallet_key_and_nonce(dongle)?;
+        let (key, _) = super::get_wallet_key_and_nonce(&mut *dongle)?;
         let wallet = super::open_wallet(&wallet_path, key)?;
 
-        let mut all_txos = vec![];
-
-        let mut full_balance = 0;
-        for (n, _) in wallet.descriptors() {
-            let txos = wallet.txos_for(n);
-            let mut balance = 0;
-            for txo in txos {
-                if txo.spending_txid().is_none() {
-                    all_txos.push(*txo);
-                    balance += txo.value();
-                }
-            }
-            full_balance += balance;
-        }
+        let mut all_txos: Vec<_> = wallet.all_txos(dongle).collect();
         all_txos.sort();
+
+        let full_balance = all_txos
+            .iter()
+            .filter(|txo| txo.is_unspent())
+            .map(TxoInfo::value)
+            .sum::<u64>();
+
         for txo in all_txos {
             println!("{}", txo);
         }

@@ -17,9 +17,11 @@
 //! Support for the on-disk wallet format
 //!
 
+mod address;
 mod chacha20;
 mod crypt;
 mod serialize;
+mod txo;
 
 use miniscript::{self, DescriptorTrait, TranslatePk2};
 use miniscript::bitcoin::{self, util::bip32};
@@ -31,12 +33,11 @@ use std::{
     cmp,
     fmt,
     io::{self, Read, Seek, Write},
-    str::FromStr,
 };
 
 use crate::{Dongle, Error};
-
-const MAX_DESCRIPTOR_LEN: u32 = 64 * 1024;
+pub use self::address::Address;
+pub use self::txo::Txo;
 
 /// Opaque cache of all scriptpubkeys the wallet is tracking
 pub struct ScriptPubkeyCache {
@@ -51,26 +52,32 @@ pub struct Wallet {
     pub block_height: u64,
     /// List of descriptors tracked by the wallet
     pub descriptors: Vec<Descriptor>,
+    /// Set of outstanding addresses that have notes attached to them
+    pub addresses: HashMap<bitcoin::Script, Address>,
     /// Set of TXOs owned by the wallet
     pub txos: HashMap<bitcoin::OutPoint, Txo>,
     /// Cache of keys we've gotten from the dongel
-    pub key_cache: HashMap<bip32::DerivationPath, bitcoin::PublicKey>,
+    pub key_cache: RefCell<HashMap<bip32::DerivationPath, bitcoin::PublicKey>>,
 }
 
 impl Wallet {
     /// Construct a new empty wallet
     pub fn new() -> Self { Self::default() }
 
+    /// Iterator over all TXOs tracked by the wallet
+    pub fn all_txos<'a, D: Dongle>(&'a self, dongle: &'a mut D) -> impl Iterator<Item=TxoInfo<'a>> {
+        self.txos.keys().map(move |key| self.txo(dongle, *key).unwrap())
+    }
+
     /// Helper fuction that caches keys from the Ledger and computes the
     /// scriptpubkey corresponding to an instantiated descriptor
     fn cache_key<D: Dongle>(
-        key_cache: &mut HashMap<bip32::DerivationPath, bitcoin::PublicKey>,
+        key_cache: &RefCell<HashMap<bip32::DerivationPath, bitcoin::PublicKey>>,
         desc: &miniscript::Descriptor<miniscript::DescriptorPublicKey>,
         index: u32,
         dongle: &mut D,
     ) -> Result<bitcoin::Script, Error> {
         let dongle = RefCell::new(&mut *dongle);
-        let key_cache = RefCell::new(key_cache);
 
         let copy = desc.derive(index);
         let inst = copy.translate_pk2(
@@ -101,7 +108,7 @@ impl Wallet {
         for i in low..high {
             if !existing_indices.contains(&i) {
                 added_new += 1;
-                Wallet::cache_key(&mut self.key_cache, &desc, i, &mut *dongle)?;
+                Wallet::cache_key(&self.key_cache, &desc, i, &mut *dongle)?;
             }
         }
 
@@ -124,7 +131,33 @@ impl Wallet {
 
     /// Gets the set of TXOs associated with a particular descriptor
     pub fn txos_for<'a>(&'a self, descriptor_idx: usize) -> HashSet<&'a Txo> {
-        self.txos.values().filter(|txo| txo.descriptor_idx as usize == descriptor_idx).collect()
+        self.txos.values().filter(|txo| txo.descriptor_idx() as usize == descriptor_idx).collect()
+    }
+
+    /// Looks up a specific TXO
+    pub fn txo<'a, D: Dongle>(
+        &'a self,
+        dongle: &mut D,
+        outpoint: bitcoin::OutPoint,
+    ) -> Result<TxoInfo<'a>, Error> {
+        let txo = match self.txos.get(&outpoint) {
+            Some(txo) => txo,
+            None => return Err(Error::TxoNotFound(outpoint)),
+        };
+        let descriptor = self.descriptors[txo.descriptor_idx() as usize].desc.derive(txo.wildcard_idx());
+
+        let dongle = RefCell::new(&mut *dongle);
+
+        let inst = descriptor.translate_pk2(
+            |key| dongle.borrow_mut().get_wallet_public_key(key, &mut *self.key_cache.borrow_mut())
+        )?;
+        let spk = inst.script_pubkey();
+        Ok(TxoInfo {
+            txo: txo,
+            address: inst.address(bitcoin::Network::Bitcoin).expect("getting bitcoin address"),
+            descriptor: descriptor,
+            address_info: self.addresses.get(&spk),
+        })
     }
 
     /// Returns an opaque object the wallet can use to recognize its own scriptpubkeys
@@ -152,7 +185,7 @@ impl Wallet {
         block: &bitcoin::Block,
         height: u64,
         cache: &mut ScriptPubkeyCache,
-    ) -> Result<(HashSet<Txo>, HashSet<Txo>), Error> {
+    ) -> Result<(HashSet<bitcoin::OutPoint>, HashSet<bitcoin::OutPoint>), Error> {
         let mut received = HashSet::new();
         let mut spent = HashSet::new();
 
@@ -160,25 +193,16 @@ impl Wallet {
             for (vout, output) in tx.output.iter().enumerate() {
                 if let Some((didx, widx)) = cache.spks.get(&output.script_pubkey) {
                     let outpoint = bitcoin::OutPoint::new(tx.txid(), vout as u32);
-                    let new_txo = Txo {
-                        descriptor_idx: *didx,
-                        wildcard_idx: *widx,
-                        outpoint: outpoint,
-                        value: output.value,
-                        spent: None,
-                        height: height,
-                        spent_height: None,
-                    };
-                    received.insert(new_txo);
+                    let new_txo = Txo::new(*didx, *widx, outpoint, output.value, height);
                     self.txos.insert(outpoint, new_txo);
+                    received.insert(outpoint);
                 }
             }
 
             for input in &tx.input {
                 if let Some(txo) = self.txos.get_mut(&input.previous_output) {
-                    txo.spent = Some(tx.txid());
-                    txo.spent_height = Some(height);
-                    spent.insert(*txo);
+                    txo.set_spent(tx.txid(), height);
+                    spent.insert(input.previous_output);
                 }
             }
         }
@@ -206,21 +230,24 @@ impl Serialize for Wallet {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         self.block_height.write_to(&mut w)?;
         self.descriptors.write_to(&mut w)?;
+        self.addresses.write_to(&mut w)?;
         self.txos.write_to(&mut w)?;
-        self.key_cache.write_to(w)
+        self.key_cache.borrow().write_to(w)
     }
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         Ok(Wallet {
             block_height: Serialize::read_from(&mut r)?,
             descriptors: Serialize::read_from(&mut r)?,
+            addresses: Serialize::read_from(&mut r)?,
             txos: Serialize::read_from(&mut r)?,
-            key_cache: Serialize::read_from(r)?,
+            key_cache: RefCell::new(Serialize::read_from(r)?),
         })
     }
 }
 
 /// A descriptor held in the wallet
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Descriptor {
     /// The underlying descriptor
     pub desc: miniscript::Descriptor<miniscript::DescriptorPublicKey>,
@@ -250,184 +277,64 @@ impl Serialize for Descriptor {
     }
 }
 
-/// A (potentially spent) transaction output tracked by the wallet
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Txo {
-    /// Index into the wallet-global descriptor array
-    descriptor_idx: u32,
-    /// If the descriptor has wildcards, index into it
-    wildcard_idx: u32,
-    /// Outpoint of the TXO
-    outpoint: bitcoin::OutPoint,
-    /// Value of the TXO, in satoshis
-    value: u64,
-    /// If the TXO is spent, the txid that spent it
-    spent: Option<bitcoin::Txid>,
-    /// Blockheight at which the UTXO was created
-    height: u64,
-    /// Blockheight at which the UTXO was spenta
-    spent_height: Option<u64>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// A structure containing information about a txo tracked by the wallet
+pub struct TxoInfo<'wallet> {
+    txo: &'wallet Txo,
+    descriptor: miniscript::Descriptor<miniscript::DescriptorPublicKey>,
+    address: bitcoin::Address,
+    address_info: Option<&'wallet Address>,
 }
 
-impl Ord for Txo {
+impl<'wallat> TxoInfo<'wallat> {
+    /// Accessor for the value of this TXO
+    pub fn value(&self) -> u64 {
+        self.txo.value()
+    }
+
+    /// Whether the TXO has been spent or not
+    pub fn is_unspent(&self) -> bool {
+        self.txo.spent_height().is_none()
+    }
+}
+
+impl<'wallat> Ord for TxoInfo<'wallat> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        fn sort_key(obj: &Txo) -> impl Ord {
-            (obj.height, obj.descriptor_idx, obj.wildcard_idx, obj.outpoint)
+        fn sort_key<'a>(obj: &TxoInfo<'a>) -> impl Ord {
+            (obj.txo.height(), obj.txo.descriptor_idx(), obj.txo.wildcard_idx(), obj.txo.outpoint())
         }
         sort_key(self).cmp(&sort_key(other))
     }
 }
 
-impl PartialOrd for Txo {
+impl<'wallat> PartialOrd for TxoInfo<'wallat> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Txo {
-    /// Accessor for the outpoint of this TXO
-    pub fn outpoint(&self) -> bitcoin::OutPoint {
-        self.outpoint
-    }
-
-    /// Accessor for the height of this TXO
-    pub fn height(&self) -> u64 {
-        self.height
-    }
-
-    /// Accessor for the value of this TXO
-    pub fn value(&self) -> u64 {
-        self.value
-    }
-
-    /// If this TXO has been spent, the txid that did it
-    pub fn spending_txid(&self) -> Option<bitcoin::Txid> {
-        self.spent
-    }
-}
-
-impl fmt::Display for Txo {
+impl<'wallat> fmt::Display for TxoInfo<'wallat> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{{ outpoint: \"{}\", value: \"{}\", height: {}, descriptor: {}, index: {}",
-            self.outpoint,
-            bitcoin::Amount::from_sat(self.value),
-            self.height,
-            self.descriptor_idx,
-            self.wildcard_idx,
+            "{{ outpoint: \"{}\", value: \"{}\", height: {}, descriptor_index: {}, descriptor: \"{}\", index: {}",
+            self.txo.outpoint(),
+            bitcoin::Amount::from_sat(self.txo.value()),
+            self.txo.height(),
+            self.txo.descriptor_idx(),
+            self.descriptor,
+            self.txo.wildcard_idx(),
         )?;
-        if let Some(txid) = self.spent {
+        if let Some(txid) = self.txo.spending_txid() {
             write!(f, ", spent_by: \"{}\"", txid)?;
         }
-        if let Some(height) = self.spent_height {
+        if let Some(height) = self.txo.spent_height() {
             write!(f, ", spent_height: {}", height)?;
         }
-        f.write_str(" }")
-    }
-}
-
-impl Serialize for Txo {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        self.descriptor_idx.write_to(&mut w)?;
-        self.wildcard_idx.write_to(&mut w)?;
-        self.outpoint.write_to(&mut w)?;
-        self.value.write_to(&mut w)?;
-        self.spent.unwrap_or(Default::default()).write_to(&mut w)?;
-        self.height.write_to(&mut w)?;
-        self.spent_height.unwrap_or(Default::default()).write_to(&mut w)?;
-        Ok(())
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        Ok(Txo {
-            descriptor_idx: Serialize::read_from(&mut r)?,
-            wildcard_idx: Serialize::read_from(&mut r)?,
-            outpoint: Serialize::read_from(&mut r)?,
-            value: Serialize::read_from(&mut r)?,
-            spent: {
-                let txid = Serialize::read_from(&mut r)?;
-                if txid == bitcoin::Txid::default() {
-                    None
-                } else {
-                    Some(txid)
-                }
-            },
-            height: Serialize::read_from(&mut r)?,
-            spent_height: {
-                let height = Serialize::read_from(&mut r)?;
-                if height == 0 {
-                    None
-                } else {
-                    Some(height)
-                }
-            },
-        })
-    }
-}
-
-impl Serialize for bitcoin::PublicKey {
-    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
-        // FIXME this may panic, pending new rust-bitcoin release for fix..
-        Ok(self.write_into(w))
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        // FIXME copied from https://github.com/rust-bitcoin/rust-bitcoin/pull/542 inline this when that is merged
-        let mut bytes = [0; 65];
-        let byte_sl;
-        r.read_exact(&mut bytes[0..1])?;
-        if bytes[0] < 4 {
-            r.read_exact(&mut bytes[1..33])?;
-            byte_sl = &bytes[0..33];
-        } else {
-            r.read_exact(&mut bytes[1..65])?;
-            byte_sl = &bytes[0..65];
+        if let Some(addrinfo) = self.address_info {
+            write!(f, ", notes: {} }}", addrinfo.notes())?;
         }
-        Self::from_slice(byte_sl).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    }
-}
-
-impl Serialize for bip32::DerivationPath {
-    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
-        // We could avoid this allocation if we were less lazy..
-        let sl: &[bip32::ChildNumber] = &self.as_ref();
-        let vec: Vec<u32> = sl.iter().cloned().map(From::from).collect();
-        vec.write_to(w)
-    }
-
-    fn read_from<R: Read>(r: R) -> io::Result<Self> {
-        let path: Vec<u32> = Serialize::read_from(r)?;
-        let vec: Vec<bip32::ChildNumber> = path.into_iter().map(From::from).collect();
-        Ok(bip32::DerivationPath::from(vec))
-    }
-}
-
-impl Serialize for miniscript::Descriptor<miniscript::DescriptorPublicKey> {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        let string = self.to_string();
-        (string.len() as u32).write_to(&mut w)?;
-        w.write_all(string.as_bytes())
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let len: u32 = Serialize::read_from(&mut r)?;
-        if len > MAX_DESCRIPTOR_LEN {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "reading descriptor of length {} exceeded max {}",
-                    len,
-                    MAX_DESCRIPTOR_LEN,
-                ),
-            ));
-        }
-        let mut data = vec![0; len as usize];
-        r.read_exact(&mut data)?;
-        let s = String::from_utf8(data)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
-        miniscript::Descriptor::from_str(&s)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
+        f.write_str("}")
     }
 }
 

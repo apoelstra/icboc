@@ -17,12 +17,19 @@
 //! Data types which can be read and written to the wallet backing store
 //!
 
-use miniscript::bitcoin::hashes::Hash;
+use miniscript::bitcoin::{self, hashes::Hash, util::bip32};
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
+use std::str::FromStr;
 
-// Largest item we serialize, a Utxo structure, is 84 bytes
-const MAX_VEC_ELEMS: u32 = 100_000;
+// Largest size of a script we will serialize
+const MAX_SCRIPTPUBKEY_SIZE: u32 = 50;
+// Largest number of elements in any vector we will serialize
+const MAX_VEC_ELEMS: u32 = 10_000;
+// Largest size of a user-provided note string
+const MAX_STRING_LEN: u32 = 100_000;
+// Largest size of an individual descirptor string
+const MAX_DESCRIPTOR_LEN: u32 = 64 * 1024;
 
 /// Trait describing an object which can be de/serialized to the wallet storage
 pub trait Serialize: Sized {
@@ -187,6 +194,44 @@ impl<T: Eq + std::hash::Hash + Serialize> Serialize for HashSet<T> {
     }
 }
 
+impl Serialize for String {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        let len32: u32 = self.len() as u32;
+        if self.len() > MAX_STRING_LEN as usize {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "writing string of length {} exceeded max {} (type {})",
+                    len32,
+                    MAX_STRING_LEN,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+        len32.write_to(&mut w)?;
+        w.write_all(self.as_bytes())
+    }
+
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        let len32: u32 = Serialize::read_from(&mut r)?;
+        let mut ret = vec![0; len32 as usize];
+        if len32 > MAX_STRING_LEN {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "reading string of length {} exceeded max {} (type {})",
+                    len32,
+                    MAX_STRING_LEN,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+
+        r.read_exact(&mut ret[..])?;
+        String::from_utf8(ret).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
 impl<T: Eq + std::hash::Hash + Serialize, V: Serialize> Serialize for HashMap<T, V> {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         let len32: u32 = self.len() as u32;
@@ -233,6 +278,113 @@ impl<T: Eq + std::hash::Hash + Serialize, V: Serialize> Serialize for HashMap<T,
         Ok(ret)
     }
 }
+
+// bitcoin types
+
+impl Serialize for bitcoin::PublicKey {
+    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+        // FIXME this may panic, pending new rust-bitcoin release for fix..
+        Ok(self.write_into(w))
+    }
+
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        // FIXME copied from https://github.com/rust-bitcoin/rust-bitcoin/pull/542 inline this when that is merged
+        let mut bytes = [0; 65];
+        let byte_sl;
+        r.read_exact(&mut bytes[0..1])?;
+        if bytes[0] < 4 {
+            r.read_exact(&mut bytes[1..33])?;
+            byte_sl = &bytes[0..33];
+        } else {
+            r.read_exact(&mut bytes[1..65])?;
+            byte_sl = &bytes[0..65];
+        }
+        Self::from_slice(byte_sl).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
+impl Serialize for bip32::DerivationPath {
+    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+        // We could avoid this allocation if we were less lazy..
+        let sl: &[bip32::ChildNumber] = &self.as_ref();
+        let vec: Vec<u32> = sl.iter().cloned().map(From::from).collect();
+        vec.write_to(w)
+    }
+
+    fn read_from<R: Read>(r: R) -> io::Result<Self> {
+        let path: Vec<u32> = Serialize::read_from(r)?;
+        let vec: Vec<bip32::ChildNumber> = path.into_iter().map(From::from).collect();
+        Ok(bip32::DerivationPath::from(vec))
+    }
+}
+
+impl Serialize for miniscript::Descriptor<miniscript::DescriptorPublicKey> {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        let string = self.to_string();
+        (string.len() as u32).write_to(&mut w)?;
+        w.write_all(string.as_bytes())
+    }
+
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        let len: u32 = Serialize::read_from(&mut r)?;
+        if len > MAX_DESCRIPTOR_LEN {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "reading descriptor of length {} exceeded max {}",
+                    len,
+                    MAX_DESCRIPTOR_LEN,
+                ),
+            ));
+        }
+        let mut data = vec![0; len as usize];
+        r.read_exact(&mut data)?;
+        let s = String::from_utf8(data)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+        miniscript::Descriptor::from_str(&s)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
+    }
+}
+
+impl Serialize for bitcoin::Script {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        let len32: u32 = self.len() as u32;
+        if self.len() > MAX_SCRIPTPUBKEY_SIZE as usize {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "writing script of length {} exceeded max {} (type {})",
+                    len32,
+                    MAX_SCRIPTPUBKEY_SIZE,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+        len32.write_to(&mut w)?;
+        w.write_all(self.as_bytes())
+    }
+
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        let len32: u32 = Serialize::read_from(&mut r)?;
+        let mut ret = vec![0; len32 as usize];
+        if len32 > MAX_SCRIPTPUBKEY_SIZE {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "reading script of length {} exceeded max {} (type {})",
+                    len32,
+                    MAX_SCRIPTPUBKEY_SIZE,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+
+        r.read_exact(&mut ret[..])?;
+        Ok(bitcoin::Script::from(ret))
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
