@@ -20,7 +20,6 @@
 use anyhow::Context;
 use crate::rpc;
 use icboc::Dongle;
-use miniscript::{Descriptor, DescriptorPublicKey};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -67,7 +66,7 @@ impl super::Command for Rescan {
             let (received, spent) = wallet.scan_block(&block, height, &mut cache)
                 .with_context(|| format!("updating wallet from block {}", height))?;
             for txo in received {
-                println!("received {}", txo);
+                println!("received {}", wallet.txo(&mut *dongle, txo).unwrap());
             }
             for txo in spent {
                 println!("spent {}", txo);

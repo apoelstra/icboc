@@ -21,6 +21,7 @@ mod init;
 mod info;
 mod listunspent;
 mod importdescriptor;
+mod importicboc;
 mod rescan;
 
 use anyhow::{self, Context};
@@ -117,6 +118,7 @@ register_commands!{
     info, Info, "{ \"descriptors\": [int], \"txos\": [outpoint] }";
     listunspent, ListUnspent, "";
     importdescriptor, ImportDescriptor, "{ \"desc\": string, \"range_low\": int, \"range_high\": int }";
+    importicboc, ImportIcboc, "{ \"file\": string }";
     rescan, Rescan, "{ \"start_from\": int }";
 }
 
@@ -158,10 +160,11 @@ fn open_wallet<P: AsRef<Path>>(
     let wallet = Wallet::from_reader(fh, wallet_key)
         .with_context(|| format!("reading wallet {}", wallet_name))?;
     println!(
-        "Opened wallet at {} with {} descriptors and {} txos.",
+        "Opened wallet at {} with {} descriptors, {} txos, and {} used addresses.",
         wallet_path.as_ref().to_string_lossy(),
         wallet.descriptors.len(),
         wallet.txos.len(),
+        wallet.addresses.len(),
     );
     println!("");
     Ok(wallet)

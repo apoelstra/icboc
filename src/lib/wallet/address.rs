@@ -27,18 +27,26 @@ pub struct Address {
     descriptor_idx: u32,
     /// If the descriptor has wildcards, index into it
     wildcard_idx: u32,
+    /// Time that the address was created, in format YYYY-MM-DD HH:MM:SS+ZZZZ
+    time: String,
     /// User-provided notes about this address
     notes: String,
 }
 
 impl Address {
     /// Constructor
-    pub fn new(descriptor_idx: u32, wildcard_idx: u32, notes: String) -> Address {
+    pub fn new(descriptor_idx: u32, wildcard_idx: u32, time: String, notes: String) -> Address {
         Address {
             descriptor_idx: descriptor_idx,
             wildcard_idx: wildcard_idx,
+            time: time,
             notes: notes,
         }
+    }
+
+    /// Accessor for the time the address was created at
+    pub fn create_time(&self) -> &str {
+        &self.time
     }
 
     /// Accessor for the notes associated with the address
@@ -51,6 +59,7 @@ impl Serialize for Address {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         self.descriptor_idx.write_to(&mut w)?;
         self.wildcard_idx.write_to(&mut w)?;
+        self.time.write_to(&mut w)?;
         self.notes.write_to(w)
     }
 
@@ -58,6 +67,7 @@ impl Serialize for Address {
         Ok(Address {
             descriptor_idx: Serialize::read_from(&mut r)?,
             wildcard_idx: Serialize::read_from(&mut r)?,
+            time: Serialize::read_from(&mut r)?,
             notes: Serialize::read_from(r)?,
         })
     }

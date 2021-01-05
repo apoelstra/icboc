@@ -69,6 +69,12 @@ impl super::Command for Info {
                 full_balance += balance;
             }
         }
+        if !wallet.addresses.is_empty() {
+            for addr in wallet.addresses.values() {
+                println!("{:?}", addr);
+            }
+            println!("");
+        }
         println!("Last rescan to: {}.", wallet.block_height);
         println!("Wallet balance: {}", bitcoin::Amount::from_sat(full_balance));
         println!("");

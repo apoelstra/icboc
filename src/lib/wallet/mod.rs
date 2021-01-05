@@ -112,16 +112,36 @@ impl Wallet {
             }
         }
 
-        if added_new > 0 {
-            self.descriptors.push(Descriptor {
-                desc: desc,
-                low: low,
-                high: high,
-                next_idx: 0,
-            });
-        }
+        self.descriptors.push(Descriptor {
+            desc: desc,
+            low: low,
+            high: high,
+            next_idx: 0,
+        });
 
         Ok(added_new)
+    }
+
+    /// Adds a new address to the wallet.
+    pub fn add_address<D: Dongle>(
+        &mut self,
+        dongle: &mut D,
+        descriptor_idx: u32,
+        wildcard_idx: u32,
+        time: String,
+        notes: String,
+    ) -> Result<(), Error> {
+        let spk = Wallet::cache_key(
+            &self.key_cache,
+            &self.descriptors[descriptor_idx as usize].desc,
+            wildcard_idx,
+            &mut *dongle,
+        )?;
+        self.addresses.insert(
+            spk,
+            Address::new(descriptor_idx, wildcard_idx, time, notes),
+        );
+        Ok(())
     }
 
     /// Iterator over all descriptors in the wallet, and their index
@@ -155,7 +175,7 @@ impl Wallet {
         Ok(TxoInfo {
             txo: txo,
             address: inst.address(bitcoin::Network::Bitcoin).expect("getting bitcoin address"),
-            descriptor: descriptor,
+            descriptor: &self.descriptors[txo.descriptor_idx() as usize],
             address_info: self.addresses.get(&spk),
         })
     }
@@ -281,7 +301,7 @@ impl Serialize for Descriptor {
 /// A structure containing information about a txo tracked by the wallet
 pub struct TxoInfo<'wallet> {
     txo: &'wallet Txo,
-    descriptor: miniscript::Descriptor<miniscript::DescriptorPublicKey>,
+    descriptor: &'wallet Descriptor,
     address: bitcoin::Address,
     address_info: Option<&'wallet Address>,
 }
@@ -322,7 +342,7 @@ impl<'wallat> fmt::Display for TxoInfo<'wallat> {
             bitcoin::Amount::from_sat(self.txo.value()),
             self.txo.height(),
             self.txo.descriptor_idx(),
-            self.descriptor,
+            self.descriptor.desc,
             self.txo.wildcard_idx(),
         )?;
         if let Some(txid) = self.txo.spending_txid() {
@@ -332,7 +352,8 @@ impl<'wallat> fmt::Display for TxoInfo<'wallat> {
             write!(f, ", spent_height: {}", height)?;
         }
         if let Some(addrinfo) = self.address_info {
-            write!(f, ", notes: {} }}", addrinfo.notes())?;
+            write!(f, ", address_created_at: \"{}\"", addrinfo.create_time())?;
+            write!(f, ", notes: \"{}\"", addrinfo.notes())?;
         }
         f.write_str("}")
     }

@@ -14,11 +14,12 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.0"
-jsonrpc = { version = "0.11", path = "../../rust-bitcoin/rust-jsonrpc/newrpc" }
+jsonrpc = "0.12"
 hidapi = "1.2"
 home = "0.5"
 miniscript = { version = "4.0", path = "../../rust-bitcoin/miniscript/2020-12--hardened-wildcard", features = ["use-serde"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1.0"
+time = "0.2"
 
