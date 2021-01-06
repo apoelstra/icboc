@@ -98,6 +98,9 @@ impl Wallet {
         let mut existing_indices = HashSet::new();
         for d in &self.descriptors {
             if d.desc == desc {
+                if d.low == low && d.high == high {
+                    return Err(Error::DuplicateDescriptor);
+                }
                 for i in d.low..d.high {
                     existing_indices.insert(i);
                 }
@@ -337,11 +340,10 @@ impl<'wallat> fmt::Display for TxoInfo<'wallat> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{{ outpoint: \"{}\", value: \"{}\", height: {}, descriptor_index: {}, descriptor: \"{}\", index: {}",
+            "{{ outpoint: \"{}\", value: \"{}\", height: {}, descriptor: \"{}\", index: {}",
             self.txo.outpoint(),
             bitcoin::Amount::from_sat(self.txo.value()),
             self.txo.height(),
-            self.txo.descriptor_idx(),
             self.descriptor.desc,
             self.txo.wildcard_idx(),
         )?;

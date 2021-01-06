@@ -44,6 +44,8 @@ pub enum Error {
     DongleNotFound,
     #[error("more than one dongle detected")]
     DongleNotUnique,
+    #[error("tried to import the same descriptor twice")]
+    DuplicateDescriptor,
     #[error("utf8")]
     FromUtf8(#[from] string::FromUtf8Error),
     #[error("miniscript")]
