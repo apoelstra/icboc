@@ -24,7 +24,7 @@ use miniscript::bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
 use std::{cmp, io};
 use std::io::{Read, Seek, Write};
 
-use crate::wallet::chacha20;
+use super::chacha20;
 
 /// Magic/version bytes which identify this as an ICBOC 3D wallet
 const MAGIC_BYTES: [u8; 4] = *b"IX3D";

@@ -20,9 +20,8 @@
 use miniscript::{self, bitcoin};
 use miniscript::bitcoin::secp256k1;
 use miniscript::bitcoin::util::bip32;
-use std::collections::HashMap;
 
-use crate::{constants, Error};
+use crate::{constants, Error, KeyCache};
 use crate::util::parse_ledger_signature;
 use self::message::{Command, Response};
 //use spend::Spend;
@@ -88,34 +87,47 @@ pub trait Dongle {
     fn get_wallet_public_key(
         &mut self,
         key: &miniscript::DescriptorPublicKey,
-        key_cache: &mut HashMap<bip32::DerivationPath, bitcoin::PublicKey>,
+        key_cache: &mut KeyCache,
     ) -> Result<bitcoin::PublicKey, Error> {
         match *key {
-            miniscript::DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key),
+            miniscript::DescriptorPublicKey::SinglePub(ref single) => Ok(single.key),
             miniscript::DescriptorPublicKey::XPub(ref xkey) => {
-                assert!(xkey.wildcard == miniscript::descriptor::Wildcard::None);
-                let path = match xkey.origin {
-                    Some((fingerprint, ref originpath)) => {
-                        let our_fingerprint = self.get_master_xpub()?.fingerprint();
-                        if our_fingerprint != fingerprint {
+                if let Some(entry) = key_cache.lookup(xkey.xkey, &xkey.derivation_path) {
+                    return Ok(entry);
+                }
+
+                let fingerprint = key.master_fingerprint();
+                let key_full_path = key.full_derivation_path();
+        
+                // Check for fingerprint mismatch
+                let master_xpub = self.get_master_xpub()?;
+                if fingerprint != master_xpub.fingerprint() {
+                    return Err(Error::NotOurKey {
+                        key_fingerprint: fingerprint,
+                        our_fingerprint: master_xpub.fingerprint(),
+                    });
+                // Check for keyorigin mismatch
+                } else if let miniscript::DescriptorPublicKey::XPub(ref xkey) = *key {
+                    if let Some((_, ref originpath)) = xkey.origin {
+                        let dongle_xpub = self.get_public_key(originpath, false)?;
+                        if dongle_xpub.public_key != xkey.xkey.public_key {
+                            // This will be a confusing error message because the two
+                            // fingerprints are the same, but given that it is very
+                            // unlikely this will ever happen (absent malicious or
+                            // trollish behaviour) it didn't seem worth the effort to
+                            // produce a better error message
                             return Err(Error::NotOurKey {
                                 key_fingerprint: fingerprint,
-                                our_fingerprint: our_fingerprint,
+                                our_fingerprint: fingerprint,
                             });
                         }
-
-                        originpath.extend(&xkey.derivation_path)
-                    },
-                    None => xkey.derivation_path.clone(),
-                };
-
-                if let Some(entry) = key_cache.get(&path) {
-                    return Ok(*entry);
+                    }
                 }
-                let ret_key = self.get_public_key(&path, false).map(|wpk| wpk.public_key)?;
-                key_cache.insert(path, ret_key);
-                Ok(ret_key)
-            },
+                // The fingerprint/origin match the dongle. Look up the key and cache it.
+                let dongle_xpub = self.get_public_key(&key_full_path, false)?;
+                key_cache.insert(xkey.xkey, xkey.derivation_path.clone(), dongle_xpub.public_key);
+                Ok(dongle_xpub.public_key)
+            }
         }
     }
 

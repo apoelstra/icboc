@@ -50,7 +50,7 @@ impl super::Command for SignRawTransaction {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, _) = super::get_wallet_key_and_nonce(dongle)?;
-        let wallet = super::open_wallet(&wallet_path, key)?;
+        let wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
         let rawtx = Vec::<u8>::from_hex(&options.tx)
             .context("hex-decoding raw transaction")?;
@@ -58,14 +58,14 @@ impl super::Command for SignRawTransaction {
             .context("decoding raw transaction")?;
 
         for input in &tx.input {
-            let txo = wallet.txo(&mut *dongle, input.previous_output)
+            let txo = wallet.txo(input.previous_output)
                 .with_context(|| format!("looking up {} in wallet", input.previous_output))?;
             println!("input: {}", txo);
         }
 
         for output in &tx.output {
             if let Some(addr) = wallet.addresses.get(&output.script_pubkey) {
-                let info = addr.info(&wallet, &mut *dongle)
+                let info = addr.info(&wallet)
                     .with_context(|| format!("looking up address information for {}", output.script_pubkey))?;
                 println!("change: {}", info);
             }

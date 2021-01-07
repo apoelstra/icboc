@@ -41,9 +41,9 @@ impl super::Command for ListUnspent {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, _) = super::get_wallet_key_and_nonce(&mut *dongle)?;
-        let wallet = super::open_wallet(&wallet_path, key)?;
+        let wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
-        let mut all_txos: Vec<_> = wallet.all_txos(dongle).collect();
+        let mut all_txos: Vec<_> = wallet.all_txos().collect();
         all_txos.sort();
 
         let full_balance = all_txos

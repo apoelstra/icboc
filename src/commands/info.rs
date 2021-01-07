@@ -46,7 +46,7 @@ impl super::Command for Info {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, _) = super::get_wallet_key_and_nonce(dongle)?;
-        let wallet = super::open_wallet(&wallet_path, key)?;
+        let wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
         let mut full_balance = 0;
         if !wallet.descriptors.is_empty() {
@@ -72,8 +72,7 @@ impl super::Command for Info {
         }
         let mut addresses = Vec::with_capacity(wallet.addresses.len());
         for addr in wallet.addresses.values() {
-            let addr = addr.info(&wallet, &mut *dongle)
-                .context("looking up address info")?;
+            let addr = addr.info(&wallet).context("looking up address info")?;
             addresses.push(addr);
         }
         if !addresses.is_empty() {

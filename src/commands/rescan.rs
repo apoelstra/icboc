@@ -42,9 +42,9 @@ impl super::Command for Rescan {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
-        let mut wallet = super::open_wallet(&wallet_path, key)?;
+        let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
-        let mut cache = wallet.script_pubkey_cache(&mut *dongle)
+        let mut cache = wallet.script_pubkey_cache()
             .context("getting scriptpubkeys from wallet")?;
 
         let mut height = options.start_from.unwrap_or(wallet.block_height.saturating_sub(100));
@@ -66,7 +66,7 @@ impl super::Command for Rescan {
             let (received, spent) = wallet.scan_block(&block, height, &mut cache)
                 .with_context(|| format!("updating wallet from block {}", height))?;
             for txo in received {
-                println!("received {}", wallet.txo(&mut *dongle, txo).unwrap());
+                println!("received {}", wallet.txo(txo).unwrap());
             }
             for txo in spent {
                 println!("spent {}", txo);

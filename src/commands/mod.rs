@@ -154,14 +154,15 @@ fn get_wallet_key_and_nonce<D: Dongle>(dongle: &mut D) -> anyhow::Result<([u8; 3
 }
 
 /// Read a wallet from disk
-fn open_wallet<P: AsRef<Path>>(
+fn open_wallet<D: Dongle, P: AsRef<Path>>(
+    dongle: &mut D,
     wallet_path: P,
     wallet_key: [u8; 32],
 ) -> anyhow::Result<Wallet> {
     let wallet_name = wallet_path.as_ref().to_string_lossy().into_owned();
     let fh = fs::File::open(&wallet_path)
         .with_context(|| format!("opening wallet {}", wallet_name))?;
-    let wallet = Wallet::from_reader(fh, wallet_key)
+    let wallet = Wallet::from_reader(dongle, fh, wallet_key)
         .with_context(|| format!("reading wallet {}", wallet_name))?;
     println!(
         "Opened wallet at {} with {} descriptors, {} txos, and {} used addresses.",

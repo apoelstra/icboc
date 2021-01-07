@@ -18,18 +18,17 @@
 //!
 
 use miniscript::bitcoin::{self, hashes::Hash, util::bip32};
-use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
 use std::str::FromStr;
 
 // Largest size of a script we will serialize
-const MAX_SCRIPTPUBKEY_SIZE: u32 = 50;
+pub(super) const MAX_SCRIPTPUBKEY_SIZE: u32 = 50;
 // Largest number of elements in any vector we will serialize
-const MAX_VEC_ELEMS: u32 = 10_000;
+pub(super) const MAX_VEC_ELEMS: u32 = 10_000;
 // Largest size of a user-provided note string
-const MAX_STRING_LEN: u32 = 100_000;
+pub(super) const MAX_STRING_LEN: u32 = 100_000;
 // Largest size of an individual descirptor string
-const MAX_DESCRIPTOR_LEN: u32 = 64 * 1024;
+pub(super) const MAX_DESCRIPTOR_LEN: u32 = 64 * 1024;
 
 /// Trait describing an object which can be de/serialized to the wallet storage
 pub trait Serialize: Sized {
@@ -131,7 +130,6 @@ impl<T: Serialize> Serialize for Vec<T> {
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let len32: u32 = Serialize::read_from(&mut r)?;
-        let mut ret = Vec::with_capacity(len32 as usize);
         if len32 > MAX_VEC_ELEMS {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -144,51 +142,9 @@ impl<T: Serialize> Serialize for Vec<T> {
             ));
         }
 
+        let mut ret = Vec::with_capacity(len32 as usize);
         for _ in 0..len32 {
             ret.push(Serialize::read_from(&mut r)?);
-        }
-        Ok(ret)
-    }
-}
-
-impl<T: Eq + std::hash::Hash + Serialize> Serialize for HashSet<T> {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        let len32: u32 = self.len() as u32;
-        if self.len() > MAX_VEC_ELEMS as usize {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "writing set of length {} exceeded max {} (type {})",
-                    len32,
-                    MAX_VEC_ELEMS,
-                    std::any::type_name::<Self>(),
-                ),
-            ));
-        }
-        len32.write_to(&mut w)?;
-        for t in self {
-            t.write_to(&mut w)?;
-        }
-        Ok(())
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let len32: u32 = Serialize::read_from(&mut r)?;
-        let mut ret = HashSet::with_capacity(len32 as usize);
-        if len32 > MAX_VEC_ELEMS {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "reading set of length {} exceeded max {} (type {})",
-                    len32,
-                    MAX_VEC_ELEMS,
-                    std::any::type_name::<Self>(),
-                ),
-            ));
-        }
-
-        for _ in 0..len32 {
-            ret.insert(Serialize::read_from(&mut r)?);
         }
         Ok(ret)
     }
@@ -232,59 +188,11 @@ impl Serialize for String {
     }
 }
 
-impl<T: Eq + std::hash::Hash + Serialize, V: Serialize> Serialize for HashMap<T, V> {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        let len32: u32 = self.len() as u32;
-        if self.len() > MAX_VEC_ELEMS as usize {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "writing map of length {} exceeded max {} (type {})",
-                    len32,
-                    MAX_VEC_ELEMS,
-                    std::any::type_name::<Self>(),
-                ),
-            ));
-        }
-        len32.write_to(&mut w)?;
-        for (t, v) in self {
-            t.write_to(&mut w)?;
-            v.write_to(&mut w)?;
-        }
-        Ok(())
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let len32: u32 = Serialize::read_from(&mut r)?;
-        let mut ret = HashMap::with_capacity(len32 as usize);
-        if len32 > MAX_VEC_ELEMS {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "reading map of length {} exceeded max {} (type {})",
-                    len32,
-                    MAX_VEC_ELEMS,
-                    std::any::type_name::<Self>(),
-                ),
-            ));
-        }
-
-        for _ in 0..len32 {
-            ret.insert(
-                Serialize::read_from(&mut r)?,
-                Serialize::read_from(&mut r)?,
-            );
-        }
-        Ok(ret)
-    }
-}
-
 // bitcoin types
 
 impl Serialize for bitcoin::PublicKey {
     fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
-        // FIXME this may panic, pending new rust-bitcoin release for fix..
-        Ok(self.write_into(w))
+        self.write_into(w)
     }
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
@@ -300,6 +208,20 @@ impl Serialize for bitcoin::PublicKey {
             byte_sl = &bytes[0..65];
         }
         Self::from_slice(byte_sl).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
+impl Serialize for bip32::ExtendedPubKey {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        w.write_all(&self.encode())
+    }
+
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        let mut data = [0; 78];
+        r.read_exact(&mut data[..])?;
+        bip32::ExtendedPubKey::decode(
+            &data[..]
+        ).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 

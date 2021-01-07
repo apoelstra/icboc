@@ -15,7 +15,7 @@
 //! # Error Handling
 
 use miniscript::bitcoin;
-use std::{ops, string};
+use std::{io, ops, string};
 use thiserror::Error;
 use crate::constants;
 
@@ -48,6 +48,10 @@ pub enum Error {
     DuplicateDescriptor,
     #[error("utf8")]
     FromUtf8(#[from] string::FromUtf8Error),
+    #[error("io")]
+    Io(#[from] io::Error),
+    #[error("could not compute public key for {0}")]
+    KeyNotFound(miniscript::DescriptorPublicKey),
     #[error("miniscript")]
     Miniscript(#[from] miniscript::Error),
     #[error("not our key (fingerprint {key_fingerprint} vs our fingerprint {our_fingerprint})")]

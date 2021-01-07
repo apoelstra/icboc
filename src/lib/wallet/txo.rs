@@ -19,31 +19,29 @@
 
 use miniscript::bitcoin;
 
-use std::io::{self, Read, Write};
-use super::serialize::Serialize;
 
 /// A (potentially spent) transaction output tracked by the wallet
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Txo {
     /// Index into the wallet-global descriptor array
-    descriptor_idx: u32,
+    pub descriptor_idx: usize,
     /// If the descriptor has wildcards, index into it
-    wildcard_idx: u32,
+    pub wildcard_idx: u32,
     /// Outpoint of the TXO
-    outpoint: bitcoin::OutPoint,
+    pub outpoint: bitcoin::OutPoint,
     /// Value of the TXO, in satoshis
-    value: u64,
+    pub value: u64,
     /// If the TXO is spent, the txid that spent it
-    spent: Option<bitcoin::Txid>,
+    pub spent: Option<bitcoin::Txid>,
     /// Blockheight at which the UTXO was created
-    height: u64,
+    pub height: u64,
     /// Blockheight at which the UTXO was spenta
-    spent_height: Option<u64>,
+    pub spent_height: Option<u64>,
 }
 
 impl Txo {
     /// Constructor
-    pub fn new(descriptor_idx: u32, wildcard_idx: u32, outpoint: bitcoin::OutPoint, value: u64, height: u64) -> Txo {
+    pub fn new(descriptor_idx: usize, wildcard_idx: u32, outpoint: bitcoin::OutPoint, value: u64, height: u64) -> Txo {
         Txo {
             descriptor_idx: descriptor_idx,
             wildcard_idx: wildcard_idx,
@@ -56,7 +54,7 @@ impl Txo {
     }
 
     /// Accessor for the TXO's descriptor index
-    pub fn descriptor_idx(&self) -> u32 {
+    pub fn descriptor_idx(&self) -> usize {
         self.descriptor_idx
     }
 
@@ -94,44 +92,6 @@ impl Txo {
     pub fn set_spent(&mut self, txid: bitcoin::Txid, height: u64) {
         self.spent = Some(txid);
         self.spent_height = Some(height);
-    }
-}
-
-impl Serialize for Txo {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        self.descriptor_idx.write_to(&mut w)?;
-        self.wildcard_idx.write_to(&mut w)?;
-        self.outpoint.write_to(&mut w)?;
-        self.value.write_to(&mut w)?;
-        self.spent.unwrap_or(Default::default()).write_to(&mut w)?;
-        self.height.write_to(&mut w)?;
-        self.spent_height.unwrap_or(Default::default()).write_to(w)
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        Ok(Txo {
-            descriptor_idx: Serialize::read_from(&mut r)?,
-            wildcard_idx: Serialize::read_from(&mut r)?,
-            outpoint: Serialize::read_from(&mut r)?,
-            value: Serialize::read_from(&mut r)?,
-            spent: {
-                let txid = Serialize::read_from(&mut r)?;
-                if txid == bitcoin::Txid::default() {
-                    None
-                } else {
-                    Some(txid)
-                }
-            },
-            height: Serialize::read_from(&mut r)?,
-            spent_height: {
-                let height = Serialize::read_from(&mut r)?;
-                if height == 0 {
-                    None
-                } else {
-                    Some(height)
-                }
-            },
-        })
     }
 }
 

@@ -59,7 +59,7 @@ impl super::Command for ImportIcboc {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
-        let mut wallet = super::open_wallet(&wallet_path, key)?;
+        let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
         let icboc_name = options.file.to_string_lossy().into_owned();
 
         let icboc_meta = fs::metadata(&options.file)
@@ -132,7 +132,7 @@ impl super::Command for ImportIcboc {
                     String::from_utf8(decrypted_entry[252..endidx].to_owned())
                         .with_context(|| format!("decoding notes from entry {}", i))?
                 };
-                wallet.add_address(&mut *dongle, desc_idx as u32, Some(i as u32), time, notes)
+                wallet.add_address(desc_idx, Some(i as u32), time, notes)
                     .with_context(|| format!("importing address for entry {}", i))?;
             }
 

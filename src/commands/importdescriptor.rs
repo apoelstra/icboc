@@ -47,7 +47,7 @@ impl super::Command for ImportDescriptor {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
-        let mut wallet = super::open_wallet(&wallet_path, key)?;
+        let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
         let range = match (options.range_low, options.range_high) {
             (None, None) => 0..101,

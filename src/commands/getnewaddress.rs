@@ -49,7 +49,7 @@ impl super::Command for GetNewAddress {
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
-        let mut wallet = super::open_wallet(&wallet_path, key)?;
+        let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
         let timestr = OffsetDateTime::now_utc().format("%Y-%m-%d %H:%M:%S%z");
         assert_eq!(timestr.bytes().len(), 24);
@@ -59,7 +59,7 @@ impl super::Command for GetNewAddress {
         }
 
         // FIXME should notice/warn when overwriting an existing address
-        let addr = wallet.add_address(&mut *dongle, options.descriptor as u32, options.index, timestr, options.note)
+        let addr = wallet.add_address(options.descriptor, options.index, timestr, options.note)
             .context("adding address")?;
 
         println!("{}", addr);

@@ -17,31 +17,26 @@
 //! Information associated to a wallet-generated address
 //!
 
-use crate::{Dongle, Error};
-use miniscript::{bitcoin, DescriptorTrait, TranslatePk2};
-use std::{
-    cell::RefCell,
-    cmp, fmt,
-    io::{self, Read, Write},
-};
-use super::serialize::Serialize;
+use crate::Error;
+use miniscript::{bitcoin, DescriptorTrait};
+use std::{cmp, fmt};
 
 /// A (potentially spent) transaction output tracked by the wallet
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Address {
     /// Index into the wallet-global descriptor array
-    descriptor_idx: u32,
+    pub descriptor_idx: usize,
     /// If the descriptor has wildcards, index into it
-    wildcard_idx: u32,
+    pub wildcard_idx: u32,
     /// Time that the address was created, in format YYYY-MM-DD HH:MM:SS+ZZZZ
-    time: String,
+    pub time: String,
     /// User-provided notes about this address
-    notes: String,
+    pub notes: String,
 }
 
 impl Address {
     /// Constructor
-    pub fn new(descriptor_idx: u32, wildcard_idx: u32, time: String, notes: String) -> Address {
+    pub fn new(descriptor_idx: usize, wildcard_idx: u32, time: String, notes: String) -> Address {
         Address {
             descriptor_idx: descriptor_idx,
             wildcard_idx: wildcard_idx,
@@ -61,19 +56,8 @@ impl Address {
     }
 
     /// User-displayable information
-    pub fn info<'wallet, D: Dongle>(
-        &self,
-        wallet: &'wallet super::Wallet,
-        dongle: &mut D,
-    ) -> Result<AddressInfo<'wallet>, Error> {
-        let inst = wallet
-            .descriptors[self.descriptor_idx as usize]
-            .desc
-            .derive(self.wildcard_idx);
-        let dongle = RefCell::new(&mut *dongle);
-        let inst = inst.translate_pk2(
-            |key| dongle.borrow_mut().get_wallet_public_key(key, &mut *wallet.key_cache.borrow_mut())
-        )?;
+    pub fn info<'w>(&self, wallet: &'w super::Wallet) -> Result<AddressInfo<'w>, Error> {
+        let inst = wallet.instantiate_from_cache(self.descriptor_idx, self.wildcard_idx)?;
 
         Ok(AddressInfo {
             descriptor_idx: self.descriptor_idx,
@@ -84,29 +68,11 @@ impl Address {
     }
 }
 
-impl Serialize for Address {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        self.descriptor_idx.write_to(&mut w)?;
-        self.wildcard_idx.write_to(&mut w)?;
-        self.time.write_to(&mut w)?;
-        self.notes.write_to(w)
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        Ok(Address {
-            descriptor_idx: Serialize::read_from(&mut r)?,
-            wildcard_idx: Serialize::read_from(&mut r)?,
-            time: Serialize::read_from(&mut r)?,
-            notes: Serialize::read_from(r)?,
-        })
-    }
-}
-
 /// Address wrapper used for user display
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddressInfo<'wallet> {
     /// Index into the wallet-global descriptor array
-    descriptor_idx: u32,
+    descriptor_idx: usize,
     /// If the descriptor has wildcards, index into it
     wildcard_idx: u32,
     /// Instantiated descriptor with fixed public keys

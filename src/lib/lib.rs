@@ -33,6 +33,10 @@ mod error;
 mod wallet;
 mod util;
 
+use miniscript::bitcoin::{self, util::bip32};
+use miniscript::DescriptorPublicKey;
+use std::collections::HashMap;
+
 pub use dongle::Dongle;
 pub use dongle::ledger;
 pub use error::Error;
@@ -46,6 +50,46 @@ pub mod hid {
     pub use hidapi::HidApi as Api;
     pub use hidapi::HidDevice as Device;
     pub use hidapi::HidError as Error;
+}
+
+/// Opaque cache of keys we've queried a dongle for
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct KeyCache {
+    map: HashMap<bip32::ExtendedPubKey, HashMap<bip32::DerivationPath, bitcoin::PublicKey>>,
+}
+
+impl KeyCache {
+    /// Construct a new empty key cache
+    fn new() -> Self {
+        Default::default()
+    }
+
+    /// 
+    fn lookup_descriptor_pubkey(&self, d: &DescriptorPublicKey) -> Option<bitcoin::PublicKey> {
+        match *d {
+            DescriptorPublicKey::SinglePub(ref single) => Some(single.key),
+            DescriptorPublicKey::XPub(ref xpub) => self.lookup(xpub.xkey, &xpub.derivation_path),
+        }
+    }
+ 
+    /// Looks up a key in the map
+    fn lookup(
+        &self,
+        xpub: bip32::ExtendedPubKey,
+        path: &bip32::DerivationPath,
+    ) -> Option<bitcoin::PublicKey> {
+        self.map.get(&xpub).and_then(|map| map.get(path)).map(|key| *key)
+    }
+
+    /// Adds a key to the map
+    fn insert(
+        &mut self,
+        xpub: bip32::ExtendedPubKey,
+        path: bip32::DerivationPath,
+        key: bitcoin::PublicKey,
+    ) {
+        self.map.entry(xpub).or_insert(HashMap::new()).insert(path, key);
+    }
 }
 
 #[cfg(test)]
