@@ -132,7 +132,7 @@ impl super::Command for ImportIcboc {
                     String::from_utf8(decrypted_entry[252..endidx].to_owned())
                         .with_context(|| format!("decoding notes from entry {}", i))?
                 };
-                wallet.add_address(&mut *dongle, desc_idx as u32, i as u32, time, notes)
+                wallet.add_address(&mut *dongle, desc_idx as u32, Some(i as u32), time, notes)
                     .with_context(|| format!("importing address for entry {}", i))?;
             }
 

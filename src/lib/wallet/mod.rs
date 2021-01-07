@@ -36,7 +36,7 @@ use std::{
 };
 
 use crate::{Dongle, Error};
-pub use self::address::Address;
+pub use self::address::{Address, AddressInfo};
 pub use self::txo::Txo;
 
 /// Opaque cache of all scriptpubkeys the wallet is tracking
@@ -46,7 +46,7 @@ pub struct ScriptPubkeyCache {
 }
 
 /// Wallet structure
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Wallet {
     /// Last blockheight the wallet considers confirmed and will not rescan
     pub block_height: u64,
@@ -126,25 +126,27 @@ impl Wallet {
     }
 
     /// Adds a new address to the wallet.
-    pub fn add_address<D: Dongle>(
-        &mut self,
+    pub fn add_address<'wallet, D: Dongle>(
+        &'wallet mut self,
         dongle: &mut D,
         descriptor_idx: u32,
-        wildcard_idx: u32,
+        wildcard_idx: Option<u32>,
         time: String,
         notes: String,
-    ) -> Result<(), Error> {
+    ) -> Result<AddressInfo<'wallet>, Error> {
+        let next_idx = &mut self.descriptors[descriptor_idx as usize].next_idx;
+        let wildcard_idx = wildcard_idx.unwrap_or(*next_idx);
+        *next_idx = cmp::max(*next_idx, wildcard_idx) + 1;
+
         let spk = Wallet::cache_key(
             &self.key_cache,
             &self.descriptors[descriptor_idx as usize].desc,
             wildcard_idx,
             &mut *dongle,
         )?;
-        self.addresses.insert(
-            spk,
-            Address::new(descriptor_idx, wildcard_idx, time, notes),
-        );
-        Ok(())
+        let spk_clone = spk.clone(); // sigh rust
+        self.addresses.insert(spk, Address::new(descriptor_idx, wildcard_idx, time, notes));
+        self.addresses[&spk_clone].info(self, dongle)
     }
 
     /// Iterator over all descriptors in the wallet, and their index

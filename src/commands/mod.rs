@@ -17,6 +17,7 @@
 //! Different subcommands supported by the command-line utility
 //!
 
+mod getnewaddress;
 mod init;
 mod info;
 mod listunspent;
@@ -114,6 +115,7 @@ macro_rules! register_commands {
 }
 
 register_commands!{
+    getnewaddress, GetNewAddress, "{ \"descriptor\": int, \"index\": int }";
     init, Init, "{ \"force\": bool }";
     info, Info, "{ \"descriptors\": [int], \"txos\": [outpoint] }";
     listunspent, ListUnspent, "";
