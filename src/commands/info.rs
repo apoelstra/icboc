@@ -17,6 +17,7 @@
 //! Gets information about data stored by the wallet
 //!
 
+use anyhow::Context;
 use crate::rpc;
 use icboc::Dongle;
 use miniscript::bitcoin;
@@ -69,9 +70,16 @@ impl super::Command for Info {
                 full_balance += balance;
             }
         }
-        if !wallet.addresses.is_empty() {
-            for addr in wallet.addresses.values() {
-                println!("{:?}", addr);
+        let mut addresses = Vec::with_capacity(wallet.addresses.len());
+        for addr in wallet.addresses.values() {
+            let addr = addr.info(&wallet, &mut *dongle)
+                .context("looking up address info")?;
+            addresses.push(addr);
+        }
+        if !addresses.is_empty() {
+            addresses.sort();
+            for addr in &addresses {
+                println!("{}", addr);
             }
             println!("");
         }

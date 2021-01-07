@@ -24,6 +24,7 @@ mod listunspent;
 mod importdescriptor;
 mod importicboc;
 mod rescan;
+mod signrawtransaction;
 
 use anyhow::{self, Context};
 use icboc::{Dongle, Wallet};
@@ -122,6 +123,7 @@ register_commands!{
     importdescriptor, ImportDescriptor, "{ \"desc\": string, \"range_low\": int, \"range_high\": int }";
     importicboc, ImportIcboc, "{ \"file\": string }";
     rescan, Rescan, "{ \"start_from\": int }";
+    signrawtransaction, SignRawTransaction, "{ \"tx\": hexstring }";
 }
 
 /// Special message which has a very recognizeable pattern when

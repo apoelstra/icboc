@@ -130,7 +130,7 @@ impl<'wallet> fmt::Display for AddressInfo<'wallet> {
         let spk = self.inst_descriptor.script_pubkey();
         write!(
             f,
-            "{{ address: \"{}\", script_pubkey: \"{}\"",
+            "{{ address: \"{}\", script_pubkey: \"{:x}\"",
             self.inst_descriptor.address(bitcoin::Network::Bitcoin).unwrap(),
             spk,
         )?;
