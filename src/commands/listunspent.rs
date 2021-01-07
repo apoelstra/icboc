@@ -14,7 +14,7 @@
 
 //! `listunspent`
 //!
-//! Lists unspent UTXOs in the form of 
+//! Lists unspent UTXOs in the form of
 //!
 
 use crate::rpc;
@@ -28,8 +28,7 @@ pub struct ListUnspent;
 
 /// Lists all UTXOs
 #[derive(Deserialize)]
-pub struct Options {
-}
+pub struct Options {}
 
 impl super::Command for ListUnspent {
     type Options = Options;
@@ -61,4 +60,3 @@ impl super::Command for ListUnspent {
         return Ok(());
     }
 }
-

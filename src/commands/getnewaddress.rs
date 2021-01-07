@@ -17,8 +17,8 @@
 //! Gets information about data stored by the wallet
 //!
 
-use anyhow::Context;
 use crate::rpc;
+use anyhow::Context;
 use icboc::Dongle;
 use serde::Deserialize;
 use std::path::Path;
@@ -32,7 +32,7 @@ pub struct GetNewAddress;
 pub struct Options {
     /// Which descriptor to generate the address from
     descriptor: usize,
-    /// Which index to use 
+    /// Which index to use
     #[serde(default)]
     index: Option<u32>,
     /// Note to attach to the address
@@ -55,11 +55,15 @@ impl super::Command for GetNewAddress {
         assert_eq!(timestr.bytes().len(), 24);
 
         if options.descriptor >= wallet.descriptors.len() {
-            return Err(anyhow::Error::msg(format!("no descriptor with index {}", options.descriptor)));
+            return Err(anyhow::Error::msg(format!(
+                "no descriptor with index {}",
+                options.descriptor
+            )));
         }
 
         // FIXME should notice/warn when overwriting an existing address
-        let addr = wallet.add_address(options.descriptor, options.index, timestr, options.note)
+        let addr = wallet
+            .add_address(options.descriptor, options.index, timestr, options.note)
             .context("adding address")?;
 
         println!("{}", addr);
@@ -70,4 +74,3 @@ impl super::Command for GetNewAddress {
         return Ok(());
     }
 }
-

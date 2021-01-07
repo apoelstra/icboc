@@ -18,11 +18,11 @@
 //!
 
 mod getnewaddress;
-mod init;
-mod info;
-mod listunspent;
 mod importdescriptor;
 mod importicboc;
+mod info;
+mod init;
+mod listunspent;
 mod rescan;
 mod signrawtransaction;
 
@@ -34,12 +34,7 @@ use miniscript::bitcoin::{
 };
 use serde::de::DeserializeOwned;
 use serde_json;
-use std::{
-    borrow::Cow,
-    env,
-    fs,
-    path::Path,
-};
+use std::{borrow::Cow, env, fs, path::Path};
 
 use crate::rpc;
 
@@ -62,7 +57,7 @@ macro_rules! register_commands {
             eprintln!("Usage: {} <wallet path> <command> [options]", name);
             eprintln!("");
             eprintln!("Commands:");
-            $(eprintln!("    {:12} {}", stringify!($cmd_name), $help);)* 
+            $(eprintln!("    {:12} {}", stringify!($cmd_name), $help);)*
             Err(anyhow::Error::msg("bad invocation"))
         }
 
@@ -74,16 +69,16 @@ macro_rules! register_commands {
             let mut args = env::args_os();
             // Parse command-line parameters in a bizarrely verbose
             // way, so the borrowck doesn't complain about my pulling
-            // things out of options and then letting them die 
+            // things out of options and then letting them die
             let name = args.next();
             let name = match name.as_ref() {
                 Some(name) => name.to_string_lossy(),
                 None => usage("")?,
-            }; 
+            };
             let path = match args.next() {
                 Some(path) => path,
                 None => usage("")?,
-            }; 
+            };
             let cmd = args.next();
             let cmd = match cmd.as_ref() {
                 Some(cmd) => cmd.to_string_lossy(),
@@ -111,11 +106,11 @@ macro_rules! register_commands {
                 _ => usage(&name)?,
             }
             Ok(())
-        } 
+        }
     }
 }
 
-register_commands!{
+register_commands! {
     getnewaddress, GetNewAddress, "{ \"descriptor\": int, \"index\": int }";
     init, Init, "{ \"force\": bool }";
     info, Info, "{ \"descriptors\": [int], \"txos\": [outpoint] }";
@@ -145,10 +140,12 @@ pub const KEYSIG_PATH: [bip32::ChildNumber; 2] = [
 
 /// Utility function to query the dongle for its encryption key and a fresh uniformly random nonce
 fn get_wallet_key_and_nonce<D: Dongle>(dongle: &mut D) -> anyhow::Result<([u8; 32], [u8; 12])> {
-    let sig = dongle.sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)
+    let sig = dongle
+        .sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)
         .context("getting encryption key-signature from device")?;
     let wallet_key = sha256::Hash::hash(&sig.serialize_compact()).into_inner();
-    let wallet_nonce = dongle.get_random_nonce()
+    let wallet_nonce = dongle
+        .get_random_nonce()
         .context("getting random encryption IV from device")?;
     Ok((wallet_key, wallet_nonce))
 }
@@ -160,8 +157,8 @@ fn open_wallet<D: Dongle, P: AsRef<Path>>(
     wallet_key: [u8; 32],
 ) -> anyhow::Result<Wallet> {
     let wallet_name = wallet_path.as_ref().to_string_lossy().into_owned();
-    let fh = fs::File::open(&wallet_path)
-        .with_context(|| format!("opening wallet {}", wallet_name))?;
+    let fh =
+        fs::File::open(&wallet_path).with_context(|| format!("opening wallet {}", wallet_name))?;
     let wallet = Wallet::from_reader(dongle, fh, wallet_key)
         .with_context(|| format!("reading wallet {}", wallet_name))?;
     println!(
@@ -186,11 +183,11 @@ fn save_wallet<P: AsRef<Path>>(
     // Write out wallet
     let tmp_name = wallet_name.clone() + ".tmp";
     let fh = fs::File::create(&tmp_name)?;
-    wallet.write(fh, wallet_key, wallet_nonce)
+    wallet
+        .write(fh, wallet_key, wallet_nonce)
         .with_context(|| format!("writing to wallet {}", wallet_name))?;
     // Above line took `fh` by value, dropping it, so we can safely rename here
     fs::rename(&tmp_name, &wallet_path)
         .with_context(|| format!("renaming {} to {}", tmp_name, wallet_name))?;
     Ok(())
 }
-

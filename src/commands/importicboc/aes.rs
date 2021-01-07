@@ -92,9 +92,12 @@ impl State {
         for i in 0..8 {
             let v = self.slice[i];
             self.slice[i] = (v & bit_range(0, 4))
-                | bit_range_left(v, 4, 5, 3) | bit_range_right(v, 5, 8, 1)
-                | bit_range_left(v, 8, 10, 2) | bit_range_right(v, 10, 12, 2)
-                | bit_range_left(v, 12, 15, 1) | bit_range_right(v, 15, 16, 3);
+                | bit_range_left(v, 4, 5, 3)
+                | bit_range_right(v, 5, 8, 1)
+                | bit_range_left(v, 8, 10, 2)
+                | bit_range_right(v, 10, 12, 2)
+                | bit_range_left(v, 12, 15, 1)
+                | bit_range_right(v, 15, 16, 3);
         }
     }
 
@@ -119,7 +122,14 @@ impl State {
     }
 
     /// column_c1(r) |= (column_0(self) ^= column_c2(a))
-    fn key_setup_column_mix(&mut self, other: &mut [Self], r_idx: usize, a_idx: usize, c1: usize, c2: usize) {
+    fn key_setup_column_mix(
+        &mut self,
+        other: &mut [Self],
+        r_idx: usize,
+        a_idx: usize,
+        c1: usize,
+        c2: usize,
+    ) {
         for b in 0..8 {
             self.slice[b] ^= (other[a_idx].slice[b] >> c2) & 0x1111;
             other[r_idx].slice[b] |= (self.slice[b] & 0x1111) << c1;
@@ -146,33 +156,97 @@ impl State {
         let U5: u16 = self.slice[2];
         let U6: u16 = self.slice[1];
         let U7: u16 = self.slice[0];
-    
-        let T1: u16; let T2: u16; let T3: u16; let T4: u16; let T5: u16; let T6: u16; let T7: u16; let T8: u16; let T9: u16; let T10: u16; let T11: u16; let T12: u16; let T13: u16; let T14: u16; let T15: u16; let T16: u16;
-        let T17: u16; let T18: u16; let T19: u16; let T20: u16; let T21: u16; let T22: u16; let T23: u16; let T24: u16; let T25: u16; let T26: u16; let T27: u16; let D: u16;
-        let M1: u16; let M6: u16; let M11: u16; let M13: u16; let M15: u16; let M20: u16; let M21: u16; let M22: u16; let M23: u16; let M25: u16; let M37: u16; let M38: u16; let M39: u16; let M40: u16;
-        let M41: u16; let M42: u16; let M43: u16; let M44: u16; let M45: u16; let M46: u16; let M47: u16; let M48: u16; let M49: u16; let M50: u16; let M51: u16; let M52: u16; let M53: u16; let M54: u16;
-        let M55: u16; let M56: u16; let M57: u16; let M58: u16; let M59: u16; let M60: u16; let M61: u16; let M62: u16; let M63: u16;
-    
+
+        let T1: u16;
+        let T2: u16;
+        let T3: u16;
+        let T4: u16;
+        let T5: u16;
+        let T6: u16;
+        let T7: u16;
+        let T8: u16;
+        let T9: u16;
+        let T10: u16;
+        let T11: u16;
+        let T12: u16;
+        let T13: u16;
+        let T14: u16;
+        let T15: u16;
+        let T16: u16;
+        let T17: u16;
+        let T18: u16;
+        let T19: u16;
+        let T20: u16;
+        let T21: u16;
+        let T22: u16;
+        let T23: u16;
+        let T24: u16;
+        let T25: u16;
+        let T26: u16;
+        let T27: u16;
+        let D: u16;
+        let M1: u16;
+        let M6: u16;
+        let M11: u16;
+        let M13: u16;
+        let M15: u16;
+        let M20: u16;
+        let M21: u16;
+        let M22: u16;
+        let M23: u16;
+        let M25: u16;
+        let M37: u16;
+        let M38: u16;
+        let M39: u16;
+        let M40: u16;
+        let M41: u16;
+        let M42: u16;
+        let M43: u16;
+        let M44: u16;
+        let M45: u16;
+        let M46: u16;
+        let M47: u16;
+        let M48: u16;
+        let M49: u16;
+        let M50: u16;
+        let M51: u16;
+        let M52: u16;
+        let M53: u16;
+        let M54: u16;
+        let M55: u16;
+        let M56: u16;
+        let M57: u16;
+        let M58: u16;
+        let M59: u16;
+        let M60: u16;
+        let M61: u16;
+        let M62: u16;
+        let M63: u16;
+
         if invert {
-            let R5: u16; let R13: u16; let R17: u16; let R18: u16; let R19: u16;
+            let R5: u16;
+            let R13: u16;
+            let R17: u16;
+            let R18: u16;
+            let R19: u16;
             /* Undo linear postprocessing */
-            T23 = U0 ^ U3; 
+            T23 = U0 ^ U3;
             T22 = !(U1 ^ U3);
             T2 = !(U0 ^ U1);
-            T1 = U3 ^ U4; 
+            T1 = U3 ^ U4;
             T24 = !(U4 ^ U7);
-            R5 = U6 ^ U7; 
+            R5 = U6 ^ U7;
             T8 = !(U1 ^ T23);
-            T19 = T22 ^ R5; 
+            T19 = T22 ^ R5;
             T9 = !(U7 ^ T1);
             T10 = T2 ^ T24;
-            T13 = T2 ^ R5; 
-            T3 = T1 ^ R5; 
+            T13 = T2 ^ R5;
+            T3 = T1 ^ R5;
             T25 = !(U2 ^ T1);
-            R13 = U1 ^ U6; 
+            R13 = U1 ^ U6;
             T17 = !(U2 ^ T19);
             T20 = T24 ^ R13;
-            T4 = U4 ^ T8; 
+            T4 = U4 ^ T8;
             R17 = !(U2 ^ U5);
             R18 = !(U5 ^ U6);
             R19 = !(U2 ^ U4);
@@ -185,27 +259,27 @@ impl State {
             T26 = T3 ^ T16;
         } else {
             /* Linear preprocessing. */
-            T1 = U0 ^ U3; 
-            T2 = U0 ^ U5; 
-            T3 = U0 ^ U6; 
-            T4 = U3 ^ U5; 
-            T5 = U4 ^ U6; 
-            T6 = T1 ^ T5; 
-            T7 = U1 ^ U2; 
-            T8 = U7 ^ T6; 
-            T9 = U7 ^ T7; 
-            T10 = T6 ^ T7; 
-            T11 = U1 ^ U5; 
-            T12 = U2 ^ U5; 
-            T13 = T3 ^ T4; 
+            T1 = U0 ^ U3;
+            T2 = U0 ^ U5;
+            T3 = U0 ^ U6;
+            T4 = U3 ^ U5;
+            T5 = U4 ^ U6;
+            T6 = T1 ^ T5;
+            T7 = U1 ^ U2;
+            T8 = U7 ^ T6;
+            T9 = U7 ^ T7;
+            T10 = T6 ^ T7;
+            T11 = U1 ^ U5;
+            T12 = U2 ^ U5;
+            T13 = T3 ^ T4;
             T14 = T6 ^ T11;
             T15 = T5 ^ T11;
             T16 = T5 ^ T12;
             T17 = T9 ^ T16;
-            T18 = U3 ^ U7; 
+            T18 = U3 ^ U7;
             T19 = T7 ^ T18;
             T20 = T1 ^ T19;
-            T21 = U6 ^ U7; 
+            T21 = U6 ^ U7;
             T22 = T7 ^ T21;
             T23 = T2 ^ T22;
             T24 = T2 ^ T10;
@@ -214,7 +288,7 @@ impl State {
             T27 = T1 ^ T12;
             D = U7;
         }
-    
+
         /* Non-linear transformation (shared between the forward and backward case) */
         M1 = T13 & T6;
         M6 = T3 & T16;
@@ -358,16 +432,30 @@ impl State {
          * First compute s into the s? variables, (x^3 + {01}) * s into the s?_01
          * variables and (x^3 + x^2 + x)*s into the s?_123 variables.
          */
-        let s0 = self.slice[0]; let s1 = self.slice[1]; let s2 = self.slice[2]; let s3 = self.slice[3];
-        let s4 = self.slice[4]; let s5 = self.slice[5]; let s6 = self.slice[6]; let s7 = self.slice[7];
-        let s0_01 = s0 ^ rot(s0, 1); let s0_123 = rot(s0_01, 1) ^ rot(s0, 3);
-        let s1_01 = s1 ^ rot(s1, 1); let s1_123 = rot(s1_01, 1) ^ rot(s1, 3);
-        let s2_01 = s2 ^ rot(s2, 1); let s2_123 = rot(s2_01, 1) ^ rot(s2, 3);
-        let s3_01 = s3 ^ rot(s3, 1); let s3_123 = rot(s3_01, 1) ^ rot(s3, 3);
-        let s4_01 = s4 ^ rot(s4, 1); let s4_123 = rot(s4_01, 1) ^ rot(s4, 3);
-        let s5_01 = s5 ^ rot(s5, 1); let s5_123 = rot(s5_01, 1) ^ rot(s5, 3);
-        let s6_01 = s6 ^ rot(s6, 1); let s6_123 = rot(s6_01, 1) ^ rot(s6, 3);
-        let s7_01 = s7 ^ rot(s7, 1); let s7_123 = rot(s7_01, 1) ^ rot(s7, 3);
+        let s0 = self.slice[0];
+        let s1 = self.slice[1];
+        let s2 = self.slice[2];
+        let s3 = self.slice[3];
+        let s4 = self.slice[4];
+        let s5 = self.slice[5];
+        let s6 = self.slice[6];
+        let s7 = self.slice[7];
+        let s0_01 = s0 ^ rot(s0, 1);
+        let s0_123 = rot(s0_01, 1) ^ rot(s0, 3);
+        let s1_01 = s1 ^ rot(s1, 1);
+        let s1_123 = rot(s1_01, 1) ^ rot(s1, 3);
+        let s2_01 = s2 ^ rot(s2, 1);
+        let s2_123 = rot(s2_01, 1) ^ rot(s2, 3);
+        let s3_01 = s3 ^ rot(s3, 1);
+        let s3_123 = rot(s3_01, 1) ^ rot(s3, 3);
+        let s4_01 = s4 ^ rot(s4, 1);
+        let s4_123 = rot(s4_01, 1) ^ rot(s4, 3);
+        let s5_01 = s5 ^ rot(s5, 1);
+        let s5_123 = rot(s5_01, 1) ^ rot(s5, 3);
+        let s6_01 = s6 ^ rot(s6, 1);
+        let s6_123 = rot(s6_01, 1) ^ rot(s6, 3);
+        let s7_01 = s7 ^ rot(s7, 1);
+        let s7_123 = rot(s7_01, 1) ^ rot(s7, 3);
         /* Now compute s = s?_123 + {02} * s?_01. */
         self.slice[0] = s7_01 ^ s0_123;
         self.slice[1] = s7_01 ^ s0_01 ^ s1_123;
@@ -436,7 +524,13 @@ impl Aes256Context {
                 column.sub_bytes(false);
             }
             pos = (pos + 1) % N_KEYWORDS;
-            column.key_setup_column_mix(&mut ret.rk[..], i / 4, (i - N_KEYWORDS) / 4, i % 4, (i - N_KEYWORDS) % 4);
+            column.key_setup_column_mix(
+                &mut ret.rk[..],
+                i / 4,
+                (i - N_KEYWORDS) / 4,
+                i % 4,
+                (i - N_KEYWORDS) % 4,
+            );
         }
 
         ret
@@ -448,7 +542,7 @@ impl Aes256Context {
          * the encryption and decryption code, but requires separate setup for both.
          */
         let mut s = State::default();
-    
+
         s.load_bytes(plain16);
         s.add_round_key(&self.rk[0]);
         for round in &self.rk[1..N_ROUNDS] {
@@ -460,7 +554,7 @@ impl Aes256Context {
         s.sub_bytes(false);
         s.shift_rows();
         s.add_round_key(&self.rk[N_ROUNDS]);
-    
+
         s.save_bytes()
     }
 }
@@ -488,6 +582,3 @@ pub fn aes256_decrypt_ctr(key: [u8; 32], iv16: &mut [u8], mut cipher: &[u8]) -> 
     }
     ret
 }
-
-
-

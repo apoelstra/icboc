@@ -17,8 +17,8 @@
 //! Scans the blockchain for new transactions
 //!
 
-use anyhow::Context;
 use crate::rpc;
+use anyhow::Context;
 use icboc::Dongle;
 use serde::Deserialize;
 use std::path::Path;
@@ -44,26 +44,40 @@ impl super::Command for Rescan {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
         let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
-        let mut cache = wallet.script_pubkey_cache()
+        let mut cache = wallet
+            .script_pubkey_cache()
             .context("getting scriptpubkeys from wallet")?;
 
-        let mut height = options.start_from.unwrap_or(wallet.block_height.saturating_sub(100));
-        let mut max_height = bitcoind.getblockcount()
+        let mut height = options
+            .start_from
+            .unwrap_or(wallet.block_height.saturating_sub(100));
+        let mut max_height = bitcoind
+            .getblockcount()
             .context("getting initial block count")?;
 
-        println!("Scanning from block {}. Current height: {}", height, max_height);
+        println!(
+            "Scanning from block {}. Current height: {}",
+            height, max_height
+        );
         while height < max_height {
-            let block = bitcoind.getblock(height)
+            let block = bitcoind
+                .getblock(height)
                 .with_context(|| format!("fetching block {}", height))?;
 
             if height > 0 && height % 1000 == 0 {
                 wallet.block_height = height;
                 super::save_wallet(&wallet, &wallet_path, key, nonce)
                     .with_context(|| format!("saving wallet at height {}", height))?;
-                println!("Height {:7}: {} {:?}", height, block.block_hash(), std::time::Instant::now());
+                println!(
+                    "Height {:7}: {} {:?}",
+                    height,
+                    block.block_hash(),
+                    std::time::Instant::now()
+                );
             }
 
-            let (received, spent) = wallet.scan_block(&block, height, &mut cache)
+            let (received, spent) = wallet
+                .scan_block(&block, height, &mut cache)
                 .with_context(|| format!("updating wallet from block {}", height))?;
             for txo in received {
                 println!("received {}", wallet.txo(txo).unwrap());
@@ -85,4 +99,3 @@ impl super::Command for Rescan {
         return Ok(());
     }
 }
-

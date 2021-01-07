@@ -14,30 +14,21 @@
 
 //! # Error Handling
 
+use crate::constants;
 use miniscript::bitcoin;
 use std::{io, ops, string};
 use thiserror::Error;
-use crate::constants;
 
 /// Ice Box error
 #[allow(missing_docs)]
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("incorrect channel for APDU (expected {expected:?}, found {found:?})")]
-    ApduWrongChannel {
-        expected: u16,
-        found: u16,
-    },
+    ApduWrongChannel { expected: u16, found: u16 },
     #[error("incorrect tag for APDU (expected {expected:?}, found {found:?})")]
-    ApduWrongTag {
-        expected: u8,
-        found: u8,
-    },
+    ApduWrongTag { expected: u8, found: u8 },
     #[error("incorrect sequence no for APDU (expected {expected:?}, found {found:?})")]
-    ApduWrongSequence {
-        expected: u16,
-        found: u16,
-    },
+    ApduWrongSequence { expected: u16, found: u16 },
     #[error("bitcoin")]
     Bitcoin(#[from] bitcoin::util::key::Error),
     #[error("no dongle detected")]
@@ -81,4 +72,3 @@ pub enum Error {
     #[error("unexpected end-of-data")]
     UnexpectedEof,
 }
-

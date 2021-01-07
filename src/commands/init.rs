@@ -17,14 +17,11 @@
 //! Initializes a new wallet
 //!
 
-use anyhow::Context;
 use crate::rpc;
+use anyhow::Context;
 use icboc::{Dongle, Wallet};
 use serde::Deserialize;
-use std::{
-    path::Path,
-    fs,
-};
+use std::{fs, path::Path};
 
 /// Initialize a new wallet
 pub struct Init;
@@ -51,8 +48,13 @@ impl super::Command for Init {
             if options.force {
                 println!("WARNING: file {} already exists, overwriting.", wallet_name);
             } else {
-                println!("File {} already exists, refusing to overwrite.", wallet_name);
-                return Err(anyhow::Error::msg("will not overwrite file with new wallet"));
+                println!(
+                    "File {} already exists, refusing to overwrite.",
+                    wallet_name
+                );
+                return Err(anyhow::Error::msg(
+                    "will not overwrite file with new wallet",
+                ));
             }
         }
 
@@ -66,4 +68,3 @@ impl super::Command for Init {
         return Ok(());
     }
 }
-

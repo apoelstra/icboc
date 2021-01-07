@@ -19,7 +19,6 @@
 
 use miniscript::bitcoin;
 
-
 /// A (potentially spent) transaction output tracked by the wallet
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Txo {
@@ -41,7 +40,13 @@ pub struct Txo {
 
 impl Txo {
     /// Constructor
-    pub fn new(descriptor_idx: usize, wildcard_idx: u32, outpoint: bitcoin::OutPoint, value: u64, height: u64) -> Txo {
+    pub fn new(
+        descriptor_idx: usize,
+        wildcard_idx: u32,
+        outpoint: bitcoin::OutPoint,
+        value: u64,
+        height: u64,
+    ) -> Txo {
         Txo {
             descriptor_idx: descriptor_idx,
             wildcard_idx: wildcard_idx,
@@ -94,4 +99,3 @@ impl Txo {
         self.spent_height = Some(height);
     }
 }
-

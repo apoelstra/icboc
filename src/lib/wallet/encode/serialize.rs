@@ -64,7 +64,10 @@ impl Serialize for u32 {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let mut dat = [0; 4];
         r.read_exact(&mut dat)?;
-        Ok((dat[0] as u32) + ((dat[1] as u32) << 8) + ((dat[2] as u32) << 16) + ((dat[3] as u32) << 24))
+        Ok((dat[0] as u32)
+            + ((dat[1] as u32) << 8)
+            + ((dat[2] as u32) << 16)
+            + ((dat[3] as u32) << 24))
     }
 }
 
@@ -219,9 +222,8 @@ impl Serialize for bip32::ExtendedPubKey {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let mut data = [0; 78];
         r.read_exact(&mut data[..])?;
-        bip32::ExtendedPubKey::decode(
-            &data[..]
-        ).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        bip32::ExtendedPubKey::decode(&data[..])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
@@ -254,8 +256,7 @@ impl Serialize for miniscript::Descriptor<miniscript::DescriptorPublicKey> {
                 io::ErrorKind::InvalidData,
                 format!(
                     "reading descriptor of length {} exceeded max {}",
-                    len,
-                    MAX_DESCRIPTOR_LEN,
+                    len, MAX_DESCRIPTOR_LEN,
                 ),
             ));
         }
@@ -306,21 +307,32 @@ impl Serialize for bitcoin::Script {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
     use miniscript::bitcoin::OutPoint;
+    use std::str::FromStr;
 
     use super::*;
 
     #[test]
     fn basic_rtt() {
         let data = vec![
-            OutPoint::from_str("2222222222222222222222222222222222222222222222222222222222222222:0").unwrap(),
-            OutPoint::from_str("3322222222222222222222222222222222222222222222222222222222222222:1").unwrap(),
-            OutPoint::from_str("abcdabcda2923183201028930893081903819023810982301928301232222222:0").unwrap(),
-            OutPoint::from_str("2222222220132823173987123973219789379379122222222222222222222222:9999").unwrap(),
+            OutPoint::from_str(
+                "2222222222222222222222222222222222222222222222222222222222222222:0",
+            )
+            .unwrap(),
+            OutPoint::from_str(
+                "3322222222222222222222222222222222222222222222222222222222222222:1",
+            )
+            .unwrap(),
+            OutPoint::from_str(
+                "abcdabcda2923183201028930893081903819023810982301928301232222222:0",
+            )
+            .unwrap(),
+            OutPoint::from_str(
+                "2222222220132823173987123973219789379379122222222222222222222222:9999",
+            )
+            .unwrap(),
         ];
 
         let mut ser = vec![];
@@ -329,4 +341,3 @@ mod tests {
         assert_eq!(data, read);
     }
 }
-

@@ -23,9 +23,9 @@ mod serialize;
 
 use crate::KeyCache;
 use miniscript::bitcoin;
-use std::io::{self, Read, Write, Seek};
+use std::io::{self, Read, Seek, Write};
 
-use self::serialize::{MAX_VEC_ELEMS, Serialize};
+use self::serialize::{Serialize, MAX_VEC_ELEMS};
 
 /// The wallet structure as it is encoded on disk
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -126,7 +126,7 @@ impl Serialize for EncAddress {
         self.time.write_to(&mut w)?;
         self.notes.write_to(w)
     }
- 
+
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         Ok(EncAddress {
             descriptor_idx: Serialize::read_from(&mut r)?,
@@ -245,4 +245,3 @@ impl Serialize for KeyCache {
         Ok(ret)
     }
 }
-

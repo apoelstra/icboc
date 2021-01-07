@@ -17,13 +17,13 @@
 //! Abstract API for communicating with the device
 //!
 
-use miniscript::{self, bitcoin};
 use miniscript::bitcoin::secp256k1;
 use miniscript::bitcoin::util::bip32;
+use miniscript::{self, bitcoin};
 
-use crate::{constants, Error, KeyCache};
-use crate::util::parse_ledger_signature;
 use self::message::{Command, Response};
+use crate::util::parse_ledger_signature;
+use crate::{constants, Error, KeyCache};
 //use spend::Spend;
 
 pub mod ledger;
@@ -98,7 +98,7 @@ pub trait Dongle {
 
                 let fingerprint = key.master_fingerprint();
                 let key_full_path = key.full_derivation_path();
-        
+
                 // Check for fingerprint mismatch
                 let master_xpub = self.get_master_xpub()?;
                 if fingerprint != master_xpub.fingerprint() {
@@ -125,7 +125,11 @@ pub trait Dongle {
                 }
                 // The fingerprint/origin match the dongle. Look up the key and cache it.
                 let dongle_xpub = self.get_public_key(&key_full_path, false)?;
-                key_cache.insert(xkey.xkey, xkey.derivation_path.clone(), dongle_xpub.public_key);
+                key_cache.insert(
+                    xkey.xkey,
+                    xkey.derivation_path.clone(),
+                    dongle_xpub.public_key,
+                );
                 Ok(dongle_xpub.public_key)
             }
         }
@@ -177,64 +181,63 @@ pub trait Dongle {
         }
     }
 
-/*
-    /// Query the device for a trusted input
-    fn get_trusted_input(&mut self, tx: &Transaction, vout: u32) -> Result<Vec<u8>, Error> {
-        let command = message::GetTrustedInput::new(tx, vout, constants::apdu::ledger::MAX_APDU_SIZE);
-        let (sw, rev) = self.exchange(command)?;
-        if rev.len() != 56 {
-            return Err(Error::ResponseWrongLength(constants::apdu::ledger::ins::GET_TRUSTED_INPUT, rev.len()));
+    /*
+        /// Query the device for a trusted input
+        fn get_trusted_input(&mut self, tx: &Transaction, vout: u32) -> Result<Vec<u8>, Error> {
+            let command = message::GetTrustedInput::new(tx, vout, constants::apdu::ledger::MAX_APDU_SIZE);
+            let (sw, rev) = self.exchange(command)?;
+            if rev.len() != 56 {
+                return Err(Error::ResponseWrongLength(constants::apdu::ledger::ins::GET_TRUSTED_INPUT, rev.len()));
+            }
+            if sw == constants::apdu::ledger::sw::OK {
+                Ok(rev)
+            } else {
+                Err(Error::ApduBadStatus(sw))
+            }
         }
-        if sw == constants::apdu::ledger::sw::OK {
-            Ok(rev)
-        } else {
-            Err(Error::ApduBadStatus(sw))
-        }
-    }
 
-    /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
-    fn transaction_input_start(&mut self, spend: &Spend, index: usize, continuing: bool) -> Result<(), Error> {
-        let command = message::UntrustedHashTransactionInputStart::new(spend, index, continuing, constants::apdu::ledger::MAX_APDU_SIZE);
-        let (sw, _) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
-            Ok(())
-        } else {
-            Err(Error::ApduBadStatus(sw))
+        /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
+        fn transaction_input_start(&mut self, spend: &Spend, index: usize, continuing: bool) -> Result<(), Error> {
+            let command = message::UntrustedHashTransactionInputStart::new(spend, index, continuing, constants::apdu::ledger::MAX_APDU_SIZE);
+            let (sw, _) = self.exchange(command)?;
+            if sw == constants::apdu::ledger::sw::OK {
+                Ok(())
+            } else {
+                Err(Error::ApduBadStatus(sw))
+            }
         }
-    }
 
-    /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL` command
-    fn transaction_input_finalize(&mut self, spend: &Spend) -> Result<(), Error> {
-        let command = message::UntrustedHashTransactionInputFinalize::new(spend, constants::apdu::ledger::MAX_APDU_SIZE);
-        let (sw, _) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
-            Ok(())
-        } else {
-            Err(Error::ApduBadStatus(sw))
+        /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL` command
+        fn transaction_input_finalize(&mut self, spend: &Spend) -> Result<(), Error> {
+            let command = message::UntrustedHashTransactionInputFinalize::new(spend, constants::apdu::ledger::MAX_APDU_SIZE);
+            let (sw, _) = self.exchange(command)?;
+            if sw == constants::apdu::ledger::sw::OK {
+                Ok(())
+            } else {
+                Err(Error::ApduBadStatus(sw))
+            }
         }
-    }
 
-    /// Sends the device a `UNTRUSTED HASH SIGN` command
-    fn transaction_sign(&mut self, bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> Result<Vec<u8>, Error> {
-        let command = message::UntrustedHashSign::new(bip32_path, sighash, locktime);
-        let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
-            Ok(rev)
-        } else {
-            Err(Error::ApduBadStatus(sw))
+        /// Sends the device a `UNTRUSTED HASH SIGN` command
+        fn transaction_sign(&mut self, bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> Result<Vec<u8>, Error> {
+            let command = message::UntrustedHashSign::new(bip32_path, sighash, locktime);
+            let (sw, rev) = self.exchange(command)?;
+            if sw == constants::apdu::ledger::sw::OK {
+                Ok(rev)
+            } else {
+                Err(Error::ApduBadStatus(sw))
+            }
         }
-    }
 
-    /// Sends the device a `SET ALTERNATE COIN VERSIONS` command
-    fn set_network(&mut self, network: Network) -> Result<(), Error> {
-        let command = message::SetAlternateCoinVersions::new(network);
-        let (sw, _) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
-            Ok(())
-        } else {
-            Err(Error::ApduBadStatus(sw))
+        /// Sends the device a `SET ALTERNATE COIN VERSIONS` command
+        fn set_network(&mut self, network: Network) -> Result<(), Error> {
+            let command = message::SetAlternateCoinVersions::new(network);
+            let (sw, _) = self.exchange(command)?;
+            if sw == constants::apdu::ledger::sw::OK {
+                Ok(())
+            } else {
+                Err(Error::ApduBadStatus(sw))
+            }
         }
-    }
-*/
+    */
 }
-

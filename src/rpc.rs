@@ -1,7 +1,6 @@
-
 use anyhow::{self, Context};
-use jsonrpc::{self, arg};
 use home;
+use jsonrpc::{self, arg};
 use miniscript::bitcoin;
 use miniscript::bitcoin::hashes::{hex, sha256d};
 use std::borrow::Cow;
@@ -20,7 +19,7 @@ impl Bitcoind {
             Cow::Owned(
                 home::home_dir()
                     .expect("finding home directory")
-                    .join(&rpccookie[2..])
+                    .join(&rpccookie[2..]),
             )
         } else {
             Cow::Borrowed(Path::new(&rpccookie))
@@ -43,9 +42,13 @@ impl Bitcoind {
 
     /// Get a block at a specified height
     pub fn getblock(&self, index: u64) -> anyhow::Result<bitcoin::Block> {
-        let hash: sha256d::Hash = self.rpc_client.call("getblockhash", &[arg(index)])
+        let hash: sha256d::Hash = self
+            .rpc_client
+            .call("getblockhash", &[arg(index)])
             .with_context(|| format!("getting hash of block {}", index))?;
-        let hex: String = self.rpc_client.call("getblock", &[arg(hash), arg(0)])
+        let hex: String = self
+            .rpc_client
+            .call("getblock", &[arg(hash), arg(0)])
             .with_context(|| format!("getting hex of block {} ({})", index, hash))?;
         let bytes: Vec<u8> = hex::FromHex::from_hex(&hex)
             .with_context(|| format!("deserializing hex of block {} ({})", index, hash))?;
@@ -53,4 +56,3 @@ impl Bitcoind {
             .with_context(|| format!("decoding block {} ({})", index, hash))?)
     }
 }
-

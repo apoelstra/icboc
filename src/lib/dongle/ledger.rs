@@ -17,16 +17,13 @@
 //! Specific support for Ledger-branded dongles
 //!
 
-use byteorder::{ByteOrder, BigEndian};
-use std::time::Duration;
+use byteorder::{BigEndian, ByteOrder};
 use std::cmp;
+use std::time::Duration;
 
-use crate::{constants, hid, Error};
 use crate::constants::apdu::ledger;
-use crate::dongle::{
-    message::Command,
-    Dongle,
-};
+use crate::dongle::{message::Command, Dongle};
+use crate::{constants, hid, Error};
 
 /// Structure representing the device
 pub struct NanoS {
@@ -37,7 +34,7 @@ impl Dongle for NanoS {
     fn exchange<C: Command>(&mut self, mut cmd: C) -> Result<(u16, Vec<u8>), Error> {
         while let Some(msg) = cmd.encode_next(constants::apdu::ledger::MAX_APDU_SIZE) {
             write_apdu(&self.hid_dev, &msg)?;
-            let reply = read_apdu(&self.hid_dev, Duration::from_secs(30))?;  // TODO make this configurable
+            let reply = read_apdu(&self.hid_dev, Duration::from_secs(30))?; // TODO make this configurable
             cmd.decode_reply(reply)?;
         }
         Ok(cmd.into_reply())
@@ -62,7 +59,9 @@ impl NanoS {
         }
 
         match found_dev {
-            Some(hid_dev) => Ok(NanoS { hid_dev: hid_dev.open_device(hid)? }),
+            Some(hid_dev) => Ok(NanoS {
+                hid_dev: hid_dev.open_device(hid)?,
+            }),
             None => Err(Error::DongleNotFound),
         }
     }
@@ -77,7 +76,10 @@ fn write_apdu(hid_dev: &hid::Device, mut data: &[u8]) -> Result<(), hid::Error> 
     while !data.is_empty() {
         let mut data_frame = [0u8; constants::apdu::ledger::PACKET_SIZE];
         // Write header
-        BigEndian::write_u16(&mut data_frame[0..2], constants::apdu::ledger::DEFAULT_CHANNEL);
+        BigEndian::write_u16(
+            &mut data_frame[0..2],
+            constants::apdu::ledger::DEFAULT_CHANNEL,
+        );
         data_frame[2] = constants::apdu::ledger::TAG_APDU;
         BigEndian::write_u16(&mut data_frame[3..5], sequence_no);
 
@@ -108,7 +110,7 @@ fn write_apdu(hid_dev: &hid::Device, mut data: &[u8]) -> Result<(), hid::Error> 
 /// Read a message encoded as a APDU from the Ledger device
 fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error> {
     let mut sequence_no = 0u16;
-    let mut receive_len = 1;  // dummy value >0, will be reset on first iteration
+    let mut receive_len = 1; // dummy value >0, will be reset on first iteration
     let mut ret = vec![];
     while receive_len > 0 {
         // Read next frame
@@ -159,5 +161,3 @@ fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error>
     }
     Ok(ret)
 }
-
-

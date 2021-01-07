@@ -20,9 +20,9 @@
 //! 32-byte key and a unique (per message and key) 12-byte nonce.
 //!
 
-use miniscript::bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
-use std::{cmp, io};
+use miniscript::bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use std::io::{Read, Seek, Write};
+use std::{cmp, io};
 
 use super::chacha20;
 
@@ -104,7 +104,10 @@ impl<R: Read + Seek> CryptReader<R> {
         if hmac_read != hmac_computed {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("hmac {} does not match computed {}", hmac_read, hmac_computed),
+                format!(
+                    "hmac {} does not match computed {}",
+                    hmac_read, hmac_computed
+                ),
             ));
         }
 
@@ -219,8 +222,11 @@ impl<W: io::Write> io::Write for CryptWriter<W> {
             for i in 0..write_len {
                 chacha[i + chacha_slice_idx] ^= data[i];
             }
-            let written_len = self.writer.write(&chacha[chacha_slice_idx..chacha_slice_idx + write_len])?;
-            self.hmac_eng.input(&chacha[chacha_slice_idx..chacha_slice_idx + written_len]);
+            let written_len = self
+                .writer
+                .write(&chacha[chacha_slice_idx..chacha_slice_idx + write_len])?;
+            self.hmac_eng
+                .input(&chacha[chacha_slice_idx..chacha_slice_idx + written_len]);
 
             self.written_len += written_len;
             data = &data[written_len..];
@@ -236,8 +242,8 @@ impl<W: io::Write> io::Write for CryptWriter<W> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, Read, Write};
     use super::*;
+    use std::io::{self, Read, Write};
 
     // Joan Shelley "Teal" 2019
     const DATA: [u8; 1265] = *b"\
@@ -289,18 +295,26 @@ mod tests {
 
         let mut reader = CryptReader::new(key, io::Cursor::new(&vec[..])).expect("check mac");
         let mut new_vec = vec![0; vec.len() - 32 - 16]; // MAC and header are skipped when reading
-        reader.read_exact(&mut new_vec[..50]).expect("read first bytes");
-        reader.read_exact(&mut new_vec[50..]).expect("read last bytes");
+        reader
+            .read_exact(&mut new_vec[..50])
+            .expect("read first bytes");
+        reader
+            .read_exact(&mut new_vec[50..])
+            .expect("read last bytes");
 
         assert_eq!(&new_vec[..DATA.len()], &DATA[..]);
-        assert_eq!(&new_vec[DATA.len()..], &[0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()][..]);
+        assert_eq!(
+            &new_vec[DATA.len()..],
+            &[0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()][..]
+        );
 
         // Spot check some random bytes to see if we break the MAC
         for i in 0..10 {
             vec[i * 771] ^= 55;
-            CryptReader::new(key, io::Cursor::new(&vec[..])).err().unwrap();
+            CryptReader::new(key, io::Cursor::new(&vec[..]))
+                .err()
+                .unwrap();
             vec[i * 771] ^= 55;
         }
     }
 }
-

@@ -17,8 +17,8 @@
 //! Imports a (ranged) descriptor into the wallet
 //!
 
-use anyhow::Context;
 use crate::rpc;
+use anyhow::Context;
 use icboc::Dongle;
 use miniscript::{Descriptor, DescriptorPublicKey};
 use serde::Deserialize;
@@ -65,18 +65,22 @@ impl super::Command for ImportDescriptor {
             range.start,
             range.end - 1,
         );
-        let n_added = wallet.add_descriptor(
-            options.desc,
-            range.start,
-            range.end,
-            &mut *dongle,
-        ).with_context(|| "importing descriptor")?;
+        let n_added = wallet
+            .add_descriptor(options.desc, range.start, range.end, &mut *dongle)
+            .with_context(|| "importing descriptor")?;
 
         if n_added == 0 {
-            println!("Wallet already has all keys from {} through {}.", range.start, range.end - 1);
+            println!(
+                "Wallet already has all keys from {} through {}.",
+                range.start,
+                range.end - 1
+            );
             return Err(anyhow::Error::msg("nothing to do"));
         }
-        println!("Imported {} new addresses. You should now call `rescan`.", n_added);
+        println!(
+            "Imported {} new addresses. You should now call `rescan`.",
+            n_added
+        );
 
         super::save_wallet(&wallet, wallet_path, key, nonce)
             .with_context(|| format!("saving wallet after import"))?;
@@ -84,4 +88,3 @@ impl super::Command for ImportDescriptor {
         return Ok(());
     }
 }
-

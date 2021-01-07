@@ -21,17 +21,21 @@ mod address;
 mod encode;
 mod txo;
 
-use miniscript::{self, DescriptorTrait, ForEachKey, TranslatePk2};
 use miniscript::bitcoin;
+use miniscript::{self, DescriptorTrait, ForEachKey, TranslatePk2};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::{cmp, fmt, io::{Read, Seek, Write}};
+use std::{
+    cmp, fmt,
+    io::{Read, Seek, Write},
+    sync::{Arc, Mutex},
+};
 
-use crate::{Dongle, Error, KeyCache};
 pub use self::address::{Address, AddressInfo};
-pub use self::txo::Txo;
 use self::encode::{EncAddress, EncDescriptor, EncTxo, EncWallet};
+pub use self::txo::Txo;
+use crate::{Dongle, Error, KeyCache};
 
 /// Opaque cache of all scriptpubkeys the wallet is tracking
 pub struct ScriptPubkeyCache {
@@ -45,7 +49,7 @@ pub struct Wallet {
     /// Last blockheight the wallet considers confirmed and will not rescan
     pub block_height: u64,
     /// List of descriptors tracked by the wallet
-    pub descriptors: Vec<Descriptor>,
+    pub descriptors: Vec<Arc<Descriptor>>,
     /// Set of outstanding addresses that have notes attached to them
     pub addresses: HashMap<bitcoin::Script, Address>,
     /// Set of TXOs owned by the wallet
@@ -56,7 +60,9 @@ pub struct Wallet {
 
 impl Wallet {
     /// Construct a new empty wallet
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Read a wallet in encrypted form
     pub fn from_reader<D: Dongle, R: Read + Seek>(
@@ -79,7 +85,7 @@ impl Wallet {
             let idx = ret.descriptors.len();
             let mut next_idx = 0;
             // Re-cache keys (this should be basically a no-op, but allows the user
-            // to recover in case the dongle was malfunctioning the last time the 
+            // to recover in case the dongle was malfunctioning the last time the
             // cache was created).
             //
             // Also determine the next unused index
@@ -89,28 +95,27 @@ impl Wallet {
                     next_idx = cmp::max(next_idx, enc_addr.wildcard_idx + 1);
                 }
             }
-            ret.descriptors.push(Descriptor {
+            ret.descriptors.push(Arc::new(Descriptor {
                 desc: enc_desc.desc,
+                wallet_idx: idx,
                 low: enc_desc.low,
                 high: enc_desc.high,
-                next_idx: next_idx,
-            });
+                next_idx: Mutex::new(next_idx),
+            }));
         }
         // Build address map
         for enc_addr in enc_wallet.addresses {
             // Load keys from cache
-            let inst = ret.instantiate_from_cache(
-                enc_addr.descriptor_idx as usize,
-                enc_addr.wildcard_idx,
-            )?;
+            let desc_arc = ret.descriptors[enc_addr.descriptor_idx as usize].clone();
+            let inst = ret.instantiate_from_cache(&desc_arc.desc, enc_addr.wildcard_idx)?;
             ret.addresses.insert(
                 inst.script_pubkey(),
                 Address::new(
-                    enc_addr.descriptor_idx as usize,
+                    desc_arc,
                     enc_addr.wildcard_idx,
                     enc_addr.time,
                     enc_addr.notes,
-                )
+                ),
             );
         }
         // Build txo map
@@ -135,32 +140,46 @@ impl Wallet {
     pub fn write<W: Write>(&self, w: W, key: [u8; 32], nonce: [u8; 12]) -> Result<(), Error> {
         EncWallet {
             block_height: self.block_height,
-            descriptors: self.descriptors.iter().map(|desc| EncDescriptor {
-                desc: desc.desc.clone(),
-                low: desc.low,
-                high: desc.high,
-            }).collect(),
-            addresses: self.addresses.values().map(|addr| EncAddress {
-                descriptor_idx: addr.descriptor_idx as u32,
-                wildcard_idx: addr.wildcard_idx,
-                time: addr.time.clone(),
-                notes: addr.time.clone(),
-            }).collect(),
-            txos: self.txos.values().map(|txo| EncTxo {
-                descriptor_idx: txo.descriptor_idx as u32,
-                wildcard_idx: txo.wildcard_idx,
-                outpoint: txo.outpoint,
-                value: txo.value,
-                spent: txo.spent,
-                height: txo.height,
-                spent_height: txo.spent_height,
-            }).collect(),
+            descriptors: self
+                .descriptors
+                .iter()
+                .map(|desc| EncDescriptor {
+                    desc: desc.desc.clone(),
+                    low: desc.low,
+                    high: desc.high,
+                })
+                .collect(),
+            addresses: self
+                .addresses
+                .values()
+                .map(|addr| EncAddress {
+                    descriptor_idx: addr.descriptor.wallet_idx as u32,
+                    wildcard_idx: addr.index,
+                    time: addr.time.clone(),
+                    notes: addr.time.clone(),
+                })
+                .collect(),
+            txos: self
+                .txos
+                .values()
+                .map(|txo| EncTxo {
+                    descriptor_idx: txo.descriptor_idx as u32,
+                    wildcard_idx: txo.wildcard_idx,
+                    outpoint: txo.outpoint,
+                    value: txo.value,
+                    spent: txo.spent,
+                    height: txo.height,
+                    spent_height: txo.spent_height,
+                })
+                .collect(),
             key_cache: self.key_cache.clone(),
-        }.write(w, key, nonce).map_err(Error::from)
+        }
+        .write(w, key, nonce)
+        .map_err(Error::from)
     }
 
     /// Iterator over all TXOs tracked by the wallet
-    pub fn all_txos<'a>(&'a self) -> impl Iterator<Item=TxoInfo<'a>> {
+    pub fn all_txos<'a>(&'a self) -> impl Iterator<Item = TxoInfo<'a>> {
         self.txos.keys().map(move |key| self.txo(*key).unwrap())
     }
 
@@ -182,26 +201,27 @@ impl Wallet {
     ) {
         let dongle = RefCell::new(dongle);
         let key_cache = RefCell::new(&mut self.key_cache);
-        desc.for_each_key(|key| Wallet::cache_key(
-            *dongle.borrow_mut(),
-            *key_cache.borrow_mut(),
-            &key.as_key().clone().derive(index),
-        ).is_ok());
+        desc.for_each_key(|key| {
+            Wallet::cache_key(
+                *dongle.borrow_mut(),
+                *key_cache.borrow_mut(),
+                &key.as_key().clone().derive(index),
+            )
+            .is_ok()
+        });
     }
 
     fn instantiate_from_cache(
         &self,
-        descriptor_idx: usize,
+        descriptor: &miniscript::Descriptor<miniscript::DescriptorPublicKey>,
         index: u32,
     ) -> Result<miniscript::Descriptor<bitcoin::PublicKey>, Error> {
-        let inst = self
-            .descriptors[descriptor_idx]
-            .desc
-            .derive(index)
-            .translate_pk2(|key| match self.key_cache.lookup_descriptor_pubkey(key) {
+        let inst = descriptor.derive(index).translate_pk2(|key| {
+            match self.key_cache.lookup_descriptor_pubkey(key) {
                 Some(pk) => Ok(pk),
                 None => Err(Error::KeyNotFound(key.clone())),
-            })?;
+            }
+        })?;
         Ok(inst)
     }
 
@@ -234,12 +254,14 @@ impl Wallet {
             }
         }
 
-        self.descriptors.push(Descriptor {
+        let idx = self.descriptors.len();
+        self.descriptors.push(Arc::new(Descriptor {
             desc: desc,
+            wallet_idx: idx,
             low: low,
             high: high,
-            next_idx: 0,
-        });
+            next_idx: Mutex::new(0),
+        }));
 
         Ok(added_new)
     }
@@ -252,24 +274,31 @@ impl Wallet {
         time: String,
         notes: String,
     ) -> Result<AddressInfo<'wallet>, Error> {
-        let next_idx = &mut self.descriptors[descriptor_idx].next_idx;
+        let mut next_idx = self.descriptors[descriptor_idx].next_idx.lock().unwrap();
         let wildcard_idx = wildcard_idx.unwrap_or(*next_idx);
         *next_idx = cmp::max(*next_idx, wildcard_idx) + 1;
 
-        let spk = self.instantiate_from_cache(descriptor_idx, wildcard_idx)?.script_pubkey();
+        let desc_arc = self.descriptors[descriptor_idx].clone();
+        let spk = self
+            .instantiate_from_cache(&desc_arc.desc, wildcard_idx)?
+            .script_pubkey();
         let spk_clone = spk.clone(); // sigh rust
-        self.addresses.insert(spk, Address::new(descriptor_idx, wildcard_idx, time, notes));
+        self.addresses
+            .insert(spk, Address::new(desc_arc, wildcard_idx, time, notes));
         self.addresses[&spk_clone].info(self)
     }
 
     /// Iterator over all descriptors in the wallet, and their index
-    pub fn descriptors<'a>(&'a self) -> impl Iterator<Item=(usize, &'a Descriptor)> {
-        self.descriptors.iter().enumerate()
+    pub fn descriptors<'a>(&'a self) -> impl Iterator<Item = &'a Descriptor> {
+        self.descriptors.iter().map(|arc| &**arc)
     }
 
     /// Gets the set of TXOs associated with a particular descriptor
     pub fn txos_for<'a>(&'a self, descriptor_idx: usize) -> HashSet<&'a Txo> {
-        self.txos.values().filter(|txo| txo.descriptor_idx() == descriptor_idx).collect()
+        self.txos
+            .values()
+            .filter(|txo| txo.descriptor_idx() == descriptor_idx)
+            .collect()
     }
 
     /// Looks up a specific TXO
@@ -279,29 +308,32 @@ impl Wallet {
             None => return Err(Error::TxoNotFound(outpoint)),
         };
 
-        let inst = self.instantiate_from_cache(txo.descriptor_idx(), txo.wildcard_idx())?;
+        let desc_arc = self.descriptors[txo.descriptor_idx()].clone();
+        let inst = self.instantiate_from_cache(&desc_arc.desc, txo.wildcard_idx())?;
         let spk = inst.script_pubkey();
         Ok(TxoInfo {
             txo: txo,
-            address: inst.address(bitcoin::Network::Bitcoin).expect("getting bitcoin address"),
+            address: inst
+                .address(bitcoin::Network::Bitcoin)
+                .expect("getting bitcoin address"),
             descriptor: &self.descriptors[txo.descriptor_idx()],
             address_info: self.addresses.get(&spk),
         })
     }
 
     /// Returns an opaque object the wallet can use to recognize its own scriptpubkeys
-    pub fn script_pubkey_cache(&mut self) -> Result<ScriptPubkeyCache, Error> {
+    pub fn script_pubkey_cache(&self) -> Result<ScriptPubkeyCache, Error> {
         let mut map = HashMap::new();
         for (didx, desc) in self.descriptors.iter().enumerate() {
             for widx in desc.low..desc.high {
-                let spk = self.instantiate_from_cache(didx, widx as u32)?.script_pubkey();
+                let spk = self
+                    .instantiate_from_cache(&self.descriptors[didx].desc, widx as u32)?
+                    .script_pubkey();
                 map.insert(spk, (didx, widx as u32));
             }
         }
 
-        Ok(ScriptPubkeyCache {
-            spks: map,
-        })
+        Ok(ScriptPubkeyCache { spks: map })
     }
 
     /// Scans a block for wallet-relevant information. Returns two sets, one of
@@ -338,17 +370,26 @@ impl Wallet {
 }
 
 /// A descriptor held in the wallet
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Descriptor {
     /// The underlying descriptor
     pub desc: miniscript::Descriptor<miniscript::DescriptorPublicKey>,
+    /// Index of the descriptor in the wallet database
+    pub wallet_idx: usize,
     /// The first (inclusive) index to instantiate
     pub low: u32,
     /// The last (exclusize) index to instantiate
     pub high: u32,
     /// The next unused index at which to instantiate this descriptor
-    pub next_idx: u32,
+    pub next_idx: Mutex<u32>,
 }
+
+impl PartialEq for Descriptor {
+    fn eq(&self, other: &Descriptor) -> bool {
+        self.wallet_idx == other.wallet_idx && self.low == other.low && self.high == other.high
+    }
+}
+impl Eq for Descriptor {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A structure containing information about a txo tracked by the wallet
@@ -374,7 +415,12 @@ impl<'wallat> TxoInfo<'wallat> {
 impl<'wallat> Ord for TxoInfo<'wallat> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         fn sort_key<'a>(obj: &TxoInfo<'a>) -> impl Ord {
-            (obj.txo.height(), obj.txo.descriptor_idx(), obj.txo.wildcard_idx(), obj.txo.outpoint())
+            (
+                obj.txo.height(),
+                obj.txo.descriptor_idx(),
+                obj.txo.wildcard_idx(),
+                obj.txo.outpoint(),
+            )
         }
         sort_key(self).cmp(&sort_key(other))
     }
@@ -410,4 +456,3 @@ impl<'wallat> fmt::Display for TxoInfo<'wallat> {
         f.write_str("}")
     }
 }
-

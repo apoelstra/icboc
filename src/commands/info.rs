@@ -17,8 +17,8 @@
 //! Gets information about data stored by the wallet
 //!
 
-use anyhow::Context;
 use crate::rpc;
+use anyhow::Context;
 use icboc::Dongle;
 use miniscript::bitcoin;
 use serde::Deserialize;
@@ -51,8 +51,8 @@ impl super::Command for Info {
         let mut full_balance = 0;
         if !wallet.descriptors.is_empty() {
             println!("Descriptors:");
-            for (n, desc) in wallet.descriptors() {
-                let txos = wallet.txos_for(n);
+            for desc in wallet.descriptors() {
+                let txos = wallet.txos_for(desc.wallet_idx);
                 let mut n_spent = 0;
                 let mut balance = 0;
                 for txo in &txos {
@@ -62,7 +62,7 @@ impl super::Command for Info {
                         balance += txo.value();
                     }
                 }
-                println!("  {:4} {}", n, desc.desc);
+                println!("  {:4} {}", desc.wallet_idx, desc.desc);
                 println!("       Range: {}-{}", desc.low, desc.high - 1);
                 println!("       TXOs: {} total, {} spent", txos.len(), n_spent);
                 println!("       Balance: {}", bitcoin::Amount::from_sat(balance));
@@ -83,10 +83,12 @@ impl super::Command for Info {
             println!("");
         }
         println!("Last rescan to: {}.", wallet.block_height);
-        println!("Wallet balance: {}", bitcoin::Amount::from_sat(full_balance));
+        println!(
+            "Wallet balance: {}",
+            bitcoin::Amount::from_sat(full_balance)
+        );
         println!("");
 
         return Ok(());
     }
 }
-

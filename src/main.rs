@@ -32,26 +32,27 @@ fn main() -> anyhow::Result<()> {
     // Talk to the bitcoind
     let bitcoind = rpc::Bitcoind::connect("~/.bitcoin/.cookie")?;
     let n = bitcoind.getblockcount()?;
-    println!("Connected to bitcoind. Block count: {}" , n);
+    println!("Connected to bitcoind. Block count: {}", n);
 
     // Contact device and run GET FIRMWARE to sanity check it
-    let hid_api = icboc::hid::Api::new()
-        .context("getting HID API context")?;
-    let mut dongle = icboc::ledger::NanoS::get(&hid_api)
-        .context("finding dongle")?;
-    let version = dongle.get_firmware_version()
+    let hid_api = icboc::hid::Api::new().context("getting HID API context")?;
+    let mut dongle = icboc::ledger::NanoS::get(&hid_api).context("finding dongle")?;
+    let version = dongle
+        .get_firmware_version()
         .context("getting app version")?;
-    let master_xpub = dongle.get_master_xpub()
-        .context("getting master xpub")?;
+    let master_xpub = dongle.get_master_xpub().context("getting master xpub")?;
     println!("Found dongle.");
-    println!("    Bitcoin app version {}.{}.{}", version.major_version, version.minor_version, version.patch_version);
+    println!(
+        "    Bitcoin app version {}.{}.{}",
+        version.major_version, version.minor_version, version.patch_version
+    );
     println!("    Master xpub: {}", master_xpub);
     println!("    Master fingerprint: {}", master_xpub.fingerprint());
 
     // Do the user's bidding
     commands::execute_from_args(&bitcoind, &mut dongle)?;
 
-/*
+    /*
     // Decide what to do
     match &args[2][..] {
         // Create a new wallet
@@ -326,4 +327,3 @@ fn main() -> anyhow::Result<()> {
     */
     Ok(())
 }
-

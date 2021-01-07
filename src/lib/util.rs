@@ -58,7 +58,9 @@ pub fn hash_sha256(input: &[u8]) -> [u8; 32] {
 /// Anyway, to parse these, the most straightforward thing is to pull the
 /// recid out of the 30/31 byte as suggested, then force the byte to 0x30
 /// and parse using from_der_lax.
-pub fn parse_ledger_signature_recoverable(sig: &mut [u8]) -> Result<RecoverableSignature, secp256k1::Error> {
+pub fn parse_ledger_signature_recoverable(
+    sig: &mut [u8],
+) -> Result<RecoverableSignature, secp256k1::Error> {
     // Check recid
     let recid = if !sig.is_empty() && sig[0] == 0x31 {
         sig[0] = 0x30;
@@ -212,6 +214,3 @@ pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (V
 }
 
 */
-
-
-

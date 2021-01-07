@@ -30,18 +30,18 @@
 pub mod constants;
 mod dongle;
 mod error;
-mod wallet;
 mod util;
+mod wallet;
 
 use miniscript::bitcoin::{self, util::bip32};
 use miniscript::DescriptorPublicKey;
 use std::collections::HashMap;
 
-pub use dongle::Dongle;
 pub use dongle::ledger;
+pub use dongle::Dongle;
 pub use error::Error;
 pub use util::{parse_ledger_signature, parse_ledger_signature_recoverable};
-pub use wallet::{Descriptor, Wallet, TxoInfo};
+pub use wallet::{Descriptor, TxoInfo, Wallet};
 
 // Re-export all the hidapi types because the double `hidapi::HidDevice`
 // naming bugs me
@@ -64,21 +64,24 @@ impl KeyCache {
         Default::default()
     }
 
-    /// 
+    ///
     fn lookup_descriptor_pubkey(&self, d: &DescriptorPublicKey) -> Option<bitcoin::PublicKey> {
         match *d {
             DescriptorPublicKey::SinglePub(ref single) => Some(single.key),
             DescriptorPublicKey::XPub(ref xpub) => self.lookup(xpub.xkey, &xpub.derivation_path),
         }
     }
- 
+
     /// Looks up a key in the map
     fn lookup(
         &self,
         xpub: bip32::ExtendedPubKey,
         path: &bip32::DerivationPath,
     ) -> Option<bitcoin::PublicKey> {
-        self.map.get(&xpub).and_then(|map| map.get(path)).map(|key| *key)
+        self.map
+            .get(&xpub)
+            .and_then(|map| map.get(path))
+            .map(|key| *key)
     }
 
     /// Adds a key to the map
@@ -88,13 +91,15 @@ impl KeyCache {
         path: bip32::DerivationPath,
         key: bitcoin::PublicKey,
     ) {
-        self.map.entry(xpub).or_insert(HashMap::new()).insert(path, key);
+        self.map
+            .entry(xpub)
+            .or_insert(HashMap::new())
+            .insert(path, key);
     }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-    }
+    fn it_works() {}
 }

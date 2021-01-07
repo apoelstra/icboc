@@ -18,13 +18,13 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
+use byteorder::{BigEndian, WriteBytesExt};
 use miniscript::bitcoin;
 use miniscript::bitcoin::util::bip32;
-use byteorder::{WriteBytesExt, BigEndian};
 use std::cmp;
 
-use crate::Error;
 use crate::constants::apdu::ledger::{self, Instruction};
+use crate::Error;
 /*
 use spend;
 use util::{encode_transaction_with_cutpoints, encode_spend_inputs_with_cutpoints, encode_spend_outputs_with_cutpoints};
@@ -54,7 +54,7 @@ pub trait Command {
 pub struct GetFirmwareVersion {
     sent: bool,
     reply: Vec<u8>,
-    sw: u16
+    sw: u16,
 }
 
 impl GetFirmwareVersion {
@@ -63,7 +63,7 @@ impl GetFirmwareVersion {
         GetFirmwareVersion {
             sent: false,
             reply: vec![],
-            sw: 0
+            sw: 0,
         }
     }
 }
@@ -74,7 +74,13 @@ impl Command for GetFirmwareVersion {
             None
         } else {
             self.sent = true;
-            Some(vec![ledger::BTCHIP_CLA, Instruction::GetFirmwareVersion.into_u8(), 0, 0, 0])
+            Some(vec![
+                ledger::BTCHIP_CLA,
+                Instruction::GetFirmwareVersion.into_u8(),
+                0,
+                0,
+                0,
+            ])
         }
     }
 
@@ -120,7 +126,7 @@ pub struct FirmwareVersion {
     /// Loader major version, if applicable
     pub loader_major_version: Option<u8>,
     /// Loader minor version, if applicable
-    pub loader_minor_version: Option<u8>
+    pub loader_minor_version: Option<u8>,
 }
 
 impl Response for FirmwareVersion {
@@ -159,7 +165,7 @@ impl Response for FirmwareVersion {
             minor_version: data[3],
             patch_version: data[4],
             loader_major_version: loader_major,
-            loader_minor_version: loader_minor
+            loader_minor_version: loader_minor,
         })
     }
 }
@@ -177,14 +183,14 @@ pub struct GetWalletPublicKey<'a> {
 impl<'a> GetWalletPublicKey<'a> {
     /// Constructor
     pub fn new<P: AsRef<[bip32::ChildNumber]>>(bip32_path: &'a P, display: bool) -> Self {
-        assert!(bip32_path.as_ref().len() < 11);  // limitation of the Nano S
+        assert!(bip32_path.as_ref().len() < 11); // limitation of the Nano S
 
         GetWalletPublicKey {
             sent: false,
             reply: vec![],
             sw: 0,
             bip32_path: bip32_path.as_ref(),
-            display: display
+            display: display,
         }
     }
 }
@@ -233,7 +239,7 @@ pub struct WalletPublicKey {
     /// The base58-encoded address corresponding to the public key
     pub b58_address: String,
     /// The BIP32 chain code associated to this key
-    pub chain_code: [u8; 32]
+    pub chain_code: [u8; 32],
 }
 
 impl Response for WalletPublicKey {
@@ -242,7 +248,7 @@ impl Response for WalletPublicKey {
         if 2 + pk_len > data.len() {
             return Err(Error::UnexpectedEof);
         }
-        let mut pk = bitcoin::PublicKey::from_slice(&data[1..1+pk_len])?;
+        let mut pk = bitcoin::PublicKey::from_slice(&data[1..1 + pk_len])?;
         // The ledger will return an uncompressed public key, but actually
         // derives addresses using compressed keys
         pk.compressed = true;
@@ -261,9 +267,10 @@ impl Response for WalletPublicKey {
         let mut ret = WalletPublicKey {
             public_key: pk,
             b58_address: addr,
-            chain_code: [0; 32]
+            chain_code: [0; 32],
         };
-        ret.chain_code.clone_from_slice(&data[2 + pk_len + addr_len..]);
+        ret.chain_code
+            .clone_from_slice(&data[2 + pk_len + addr_len..]);
         Ok(ret)
     }
 }
@@ -275,13 +282,13 @@ pub struct SignMessagePrepare<'path, 'msg> {
     reply: Vec<u8>,
     sw: u16,
     bip32_path: &'path [bip32::ChildNumber],
-    message: &'msg [u8]
+    message: &'msg [u8],
 }
 
 impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
     /// Constructor
     pub fn new<P: AsRef<[bip32::ChildNumber]>>(bip32_path: &'path P, message: &'msg [u8]) -> Self {
-        assert!(bip32_path.as_ref().len() < 11);   // limitation of the Nano S
+        assert!(bip32_path.as_ref().len() < 11); // limitation of the Nano S
         assert!(message.len() < 0x10000); // limitation of the Nano S
 
         SignMessagePrepare {
@@ -289,7 +296,7 @@ impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
             reply: vec![],
             sw: 0,
             bip32_path: bip32_path.as_ref(),
-            message: message
+            message: message,
         }
     }
 }
@@ -297,7 +304,7 @@ impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
 impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent_length > self.message.len() {
-            unreachable!();  // sanity check
+            unreachable!(); // sanity check
         }
         if self.sent_length == self.message.len() {
             return None;
@@ -315,8 +322,8 @@ impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
             let mut ret = Vec::with_capacity(5 + packet_len);
             ret.push(ledger::BTCHIP_CLA);
             ret.push(Instruction::SignMessage.into_u8());
-            ret.push(0x00);  // preparing...
-            ret.push(0x01);  // ...the first part of the message
+            ret.push(0x00); // preparing...
+            ret.push(0x01); // ...the first part of the message
             ret.push(packet_len as u8);
             ret.push(self.bip32_path.len() as u8);
             for &childnum in self.bip32_path {
@@ -334,8 +341,8 @@ impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
             let mut ret = Vec::with_capacity(5 + packet_len);
             ret.push(ledger::BTCHIP_CLA);
             ret.push(Instruction::SignMessage.into_u8());
-            ret.push(0x00);  // preparing...
-            ret.push(0x80);  // ...the next part of the message
+            ret.push(0x00); // preparing...
+            ret.push(0x80); // ...the next part of the message
             ret.push(packet_len as u8);
             ret.extend(&self.message[self.sent_length..self.sent_length + packet_len]);
             self.sent_length += packet_len;
@@ -364,7 +371,7 @@ impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
 pub struct SignMessageSign {
     sent: bool,
     reply: Vec<u8>,
-    sw: u16
+    sw: u16,
 }
 
 impl SignMessageSign {
@@ -373,7 +380,7 @@ impl SignMessageSign {
         SignMessageSign {
             sent: false,
             reply: vec![],
-            sw: 0
+            sw: 0,
         }
     }
 }
@@ -390,7 +397,7 @@ impl Command for SignMessageSign {
                 0x80, // signing
                 0x00, // irrelevant
                 0x01, // no user authentication needed
-                0x00
+                0x00,
             ])
         }
     }
@@ -417,7 +424,7 @@ pub struct GetRandom {
     sent: bool,
     reply: Vec<u8>,
     sw: u16,
-    count: u8
+    count: u8,
 }
 
 impl GetRandom {
@@ -427,7 +434,7 @@ impl GetRandom {
             sent: false,
             reply: vec![],
             sw: 0,
-            count: count
+            count: count,
         }
     }
 }
@@ -438,7 +445,13 @@ impl Command for GetRandom {
             None
         } else {
             self.sent = true;
-            Some(vec![ledger::BTCHIP_CLA, Instruction::GetRandom.into_u8(), 0, 0, self.count])
+            Some(vec![
+                ledger::BTCHIP_CLA,
+                Instruction::GetRandom.into_u8(),
+                0,
+                0,
+                self.count,
+            ])
         }
     }
 
