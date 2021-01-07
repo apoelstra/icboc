@@ -47,15 +47,17 @@ pub struct ScriptPubkeyCache {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Wallet {
     /// Last blockheight the wallet considers confirmed and will not rescan
-    pub block_height: u64,
+    block_height: u64,
     /// List of descriptors tracked by the wallet
-    pub descriptors: Vec<Arc<Descriptor>>,
-    /// Set of outstanding addresses that have notes attached to them
-    pub addresses: HashMap<bitcoin::Script, Address>,
+    descriptors: Vec<Arc<Descriptor>>,
+    /// Index from scriptpubkeys to addresses
+    spk_address: HashMap<bitcoin::Script, Arc<Address>>,
+    /// Index from descriptor/index pairs to addresses
+    descriptor_address: HashMap<(usize, u32), Arc<Address>>,
     /// Set of TXOs owned by the wallet
-    pub txos: HashMap<bitcoin::OutPoint, Txo>,
+    txos: HashMap<bitcoin::OutPoint, Txo>,
     /// Cache of keys we've gotten from the dongel
-    pub key_cache: KeyCache,
+    key_cache: KeyCache,
 }
 
 impl Wallet {
@@ -76,7 +78,8 @@ impl Wallet {
         let mut ret = Wallet {
             block_height: enc_wallet.block_height,
             descriptors: Vec::with_capacity(enc_wallet.descriptors.len()),
-            addresses: HashMap::with_capacity(enc_wallet.addresses.len()),
+            spk_address: HashMap::with_capacity(enc_wallet.addresses.len()),
+            descriptor_address: HashMap::with_capacity(enc_wallet.addresses.len()),
             txos: HashMap::with_capacity(enc_wallet.txos.len()),
             key_cache: enc_wallet.key_cache,
         };
@@ -105,18 +108,20 @@ impl Wallet {
         }
         // Build address map
         for enc_addr in enc_wallet.addresses {
-            // Load keys from cache
-            let desc_arc = ret.descriptors[enc_addr.descriptor_idx as usize].clone();
+            let didx = enc_addr.descriptor_idx as usize;
+            let desc_arc = ret.descriptors[didx].clone();
+            let new_addr = Arc::new(Address {
+                descriptor: desc_arc.clone(),
+                index: enc_addr.wildcard_idx,
+                time: enc_addr.time,
+                notes: enc_addr.notes,
+            });
+
             let inst = ret.instantiate_from_cache(&desc_arc.desc, enc_addr.wildcard_idx)?;
-            ret.addresses.insert(
-                inst.script_pubkey(),
-                Address::new(
-                    desc_arc,
-                    enc_addr.wildcard_idx,
-                    enc_addr.time,
-                    enc_addr.notes,
-                ),
-            );
+            ret.spk_address
+                .insert(inst.script_pubkey(), new_addr.clone());
+            ret.descriptor_address
+                .insert((didx, enc_addr.wildcard_idx), new_addr.clone());
         }
         // Build txo map
         for enc_txo in enc_wallet.txos {
@@ -150,7 +155,7 @@ impl Wallet {
                 })
                 .collect(),
             addresses: self
-                .addresses
+                .spk_address
                 .values()
                 .map(|addr| EncAddress {
                     descriptor_idx: addr.descriptor.wallet_idx as u32,
@@ -178,9 +183,45 @@ impl Wallet {
         .map_err(Error::from)
     }
 
+    /// Accessor for the last block height that we synced this wallet to
+    pub fn block_height(&self) -> u64 {
+        self.block_height
+    }
+
+    /// Setter for the last block height
+    pub fn set_block_height(&mut self, new_height: u64) {
+        self.block_height = new_height;
+    }
+
+    /// Accessor for the number of descriptors stored in the wallet
+    pub fn n_descriptors(&self) -> usize {
+        self.descriptors.len()
+    }
+
+    /// Accessor for the number of addresses stored by the wallet
+    pub fn n_addresses(&self) -> usize {
+        debug_assert_eq!(self.spk_address.len(), self.descriptor_address.len());
+        self.spk_address.len()
+    }
+
+    /// Accessor for the number of txos tracked by the wallet
+    pub fn n_txos(&self) -> usize {
+        self.txos.len()
+    }
+
+    /// Iterator over all addresses generated in teh wallet
+    pub fn addresses<'a>(&'a self) -> impl Iterator<Item = &'a Address> {
+        self.spk_address.values().map(|arc| &**arc)
+    }
+
     /// Iterator over all TXOs tracked by the wallet
     pub fn all_txos<'a>(&'a self) -> impl Iterator<Item = TxoInfo<'a>> {
         self.txos.keys().map(move |key| self.txo(*key).unwrap())
+    }
+
+    /// Look up an address by its scriptpubkey
+    pub fn address_from_spk(&self, spk: &bitcoin::Script) -> Option<&Address> {
+        self.spk_address.get(spk).map(|arc| &**arc)
     }
 
     /// Helper fuction that (tries to) cache a key from the Ledger
@@ -282,10 +323,18 @@ impl Wallet {
         let spk = self
             .instantiate_from_cache(&desc_arc.desc, wildcard_idx)?
             .script_pubkey();
-        let spk_clone = spk.clone(); // sigh rust
-        self.addresses
-            .insert(spk, Address::new(desc_arc, wildcard_idx, time, notes));
-        self.addresses[&spk_clone].info(self)
+
+        let new_addr = Arc::new(Address {
+            descriptor: desc_arc,
+            index: wildcard_idx,
+            time: time,
+            notes: notes,
+        });
+        self.spk_address.insert(spk, new_addr.clone());
+        self.descriptor_address
+            .insert((descriptor_idx, wildcard_idx), new_addr.clone());
+
+        self.descriptor_address[&(descriptor_idx, wildcard_idx)].info(self)
     }
 
     /// Iterator over all descriptors in the wallet, and their index
@@ -317,7 +366,7 @@ impl Wallet {
                 .address(bitcoin::Network::Bitcoin)
                 .expect("getting bitcoin address"),
             descriptor: &self.descriptors[txo.descriptor_idx()],
-            address_info: self.addresses.get(&spk),
+            address_info: self.spk_address.get(&spk).map(|arc| &**arc),
         })
     }
 

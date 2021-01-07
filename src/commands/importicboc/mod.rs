@@ -98,7 +98,7 @@ impl super::Command for ImportIcboc {
 
         // 1. Import descriptor
         let master_xpub = dongle.get_master_xpub().context("getting master xpub")?;
-        let desc_idx = wallet.descriptors.len();
+        let desc_idx = wallet.n_descriptors();
         let desc =
             miniscript::Descriptor::from_str(&format!("pkh({}/44h/0h/0h/2h/*h)", master_xpub))
                 .expect("well-formed descriptor");

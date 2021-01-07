@@ -49,7 +49,7 @@ impl super::Command for Info {
         let wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
         let mut full_balance = 0;
-        if !wallet.descriptors.is_empty() {
+        if wallet.n_descriptors() > 0 {
             println!("Descriptors:");
             for desc in wallet.descriptors() {
                 let txos = wallet.txos_for(desc.wallet_idx);
@@ -70,8 +70,8 @@ impl super::Command for Info {
                 full_balance += balance;
             }
         }
-        let mut addresses = Vec::with_capacity(wallet.addresses.len());
-        for addr in wallet.addresses.values() {
+        let mut addresses = Vec::with_capacity(wallet.n_addresses());
+        for addr in wallet.addresses() {
             let addr = addr.info(&wallet).context("looking up address info")?;
             addresses.push(addr);
         }
@@ -82,7 +82,7 @@ impl super::Command for Info {
             }
             println!("");
         }
-        println!("Last rescan to: {}.", wallet.block_height);
+        println!("Last rescan to: {}.", wallet.block_height());
         println!(
             "Wallet balance: {}",
             bitcoin::Amount::from_sat(full_balance)

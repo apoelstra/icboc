@@ -164,9 +164,9 @@ fn open_wallet<D: Dongle, P: AsRef<Path>>(
     println!(
         "Opened wallet at {} with {} descriptors, {} txos, and {} used addresses.",
         wallet_path.as_ref().to_string_lossy(),
-        wallet.descriptors.len(),
-        wallet.txos.len(),
-        wallet.addresses.len(),
+        wallet.n_descriptors(),
+        wallet.n_txos(),
+        wallet.n_addresses(),
     );
     println!("");
     Ok(wallet)

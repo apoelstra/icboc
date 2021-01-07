@@ -54,7 +54,7 @@ impl super::Command for GetNewAddress {
         let timestr = OffsetDateTime::now_utc().format("%Y-%m-%d %H:%M:%S%z");
         assert_eq!(timestr.bytes().len(), 24);
 
-        if options.descriptor >= wallet.descriptors.len() {
+        if options.descriptor >= wallet.n_descriptors() {
             return Err(anyhow::Error::msg(format!(
                 "no descriptor with index {}",
                 options.descriptor

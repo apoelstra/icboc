@@ -35,21 +35,6 @@ pub struct Address {
 }
 
 impl Address {
-    /// Constructor
-    pub fn new(
-        descriptor: Arc<super::Descriptor>,
-        index: u32,
-        time: String,
-        notes: String,
-    ) -> Address {
-        Address {
-            descriptor: descriptor,
-            index: index,
-            time: time,
-            notes: notes,
-        }
-    }
-
     /// Accessor for the time the address was created at
     pub fn create_time(&self) -> &str {
         &self.time
@@ -90,7 +75,7 @@ impl<'wallet> AddressInfo<'wallet> {
     /// Accessor for the creation time of the address, if known
     pub fn create_time(&self) -> Option<&str> {
         self.wallet
-            .addresses
+            .spk_address
             .get(&self.inst_descriptor.script_pubkey())
             .map(|addr| &addr.time[..])
     }
@@ -107,7 +92,7 @@ impl<'wallet> fmt::Display for AddressInfo<'wallet> {
                 .unwrap(),
             spk,
         )?;
-        if let Some(addr) = self.wallet.addresses.get(&spk) {
+        if let Some(addr) = self.wallet.spk_address.get(&spk) {
             write!(
                 f,
                 " notes: \"{}\", address_created_at: \"{}\"",

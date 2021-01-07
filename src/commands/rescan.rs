@@ -50,7 +50,7 @@ impl super::Command for Rescan {
 
         let mut height = options
             .start_from
-            .unwrap_or(wallet.block_height.saturating_sub(100));
+            .unwrap_or(wallet.block_height().saturating_sub(100));
         let mut max_height = bitcoind
             .getblockcount()
             .context("getting initial block count")?;
@@ -65,7 +65,7 @@ impl super::Command for Rescan {
                 .with_context(|| format!("fetching block {}", height))?;
 
             if height > 0 && height % 1000 == 0 {
-                wallet.block_height = height;
+                wallet.set_block_height(height);
                 super::save_wallet(&wallet, &wallet_path, key, nonce)
                     .with_context(|| format!("saving wallet at height {}", height))?;
                 println!(
@@ -91,7 +91,7 @@ impl super::Command for Rescan {
                 max_height = bitcoind.getblockcount().context("getting block count")?;
             }
         }
-        wallet.block_height = height;
+        wallet.set_block_height(height);
 
         super::save_wallet(&wallet, &wallet_path, key, nonce)
             .with_context(|| format!("saving wallet at height {}", height))?;

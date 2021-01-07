@@ -60,7 +60,7 @@ impl super::Command for SignRawTransaction {
         }
 
         for output in &tx.output {
-            if let Some(addr) = wallet.addresses.get(&output.script_pubkey) {
+            if let Some(addr) = wallet.address_from_spk(&output.script_pubkey) {
                 let info = addr.info(&wallet).with_context(|| {
                     format!(
                         "looking up address information for {}",
