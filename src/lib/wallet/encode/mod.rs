@@ -40,6 +40,8 @@ pub struct EncWallet {
     pub txos: Vec<EncTxo>,
     /// Cache of keys we've gotten from the dongle
     pub key_cache: KeyCache,
+    /// Set of transactions that we care about
+    pub tx_cache: Vec<bitcoin::Transaction>,
 }
 
 impl EncWallet {
@@ -65,7 +67,8 @@ impl Serialize for EncWallet {
         self.descriptors.write_to(&mut w)?;
         self.addresses.write_to(&mut w)?;
         self.txos.write_to(&mut w)?;
-        self.key_cache.write_to(w)
+        self.key_cache.write_to(&mut w)?;
+        self.tx_cache.write_to(w)
     }
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
@@ -74,7 +77,8 @@ impl Serialize for EncWallet {
             descriptors: Serialize::read_from(&mut r)?,
             addresses: Serialize::read_from(&mut r)?,
             txos: Serialize::read_from(&mut r)?,
-            key_cache: Serialize::read_from(r)?,
+            key_cache: Serialize::read_from(&mut r)?,
+            tx_cache: Serialize::read_from(r)?,
         })
     }
 }

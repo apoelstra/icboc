@@ -51,8 +51,10 @@ pub struct Wallet {
     descriptor_address: HashMap<(usize, u32), Arc<Address>>,
     /// Set of TXOs owned by the wallet
     txos: HashMap<bitcoin::OutPoint, Txo>,
-    /// Cache of keys we've gotten from the dongel
+    /// Cache of keys we've gotten from the dongle
     key_cache: KeyCache,
+    /// Cache of transactions that are relevant to us
+    tx_cache: HashMap<bitcoin::Txid, bitcoin::Transaction>,
 }
 
 impl Wallet {
@@ -77,6 +79,11 @@ impl Wallet {
             descriptor_address: HashMap::with_capacity(enc_wallet.addresses.len()),
             txos: HashMap::with_capacity(enc_wallet.txos.len()),
             key_cache: enc_wallet.key_cache,
+            tx_cache: enc_wallet
+                .tx_cache
+                .into_iter()
+                .map(|tx| (tx.txid(), tx))
+                .collect(),
         };
         // Copy descriptors into arcs
         for enc_desc in enc_wallet.descriptors {
@@ -197,6 +204,7 @@ impl Wallet {
                 })
                 .collect(),
             key_cache: self.key_cache.clone(),
+            tx_cache: self.tx_cache.values().cloned().collect(),
         }
         .write(w, key, nonce)
         .map_err(Error::from)
@@ -405,6 +413,7 @@ impl Wallet {
                         }
                         Entry::Occupied(mut o) => o.get_mut().height = height,
                     }
+                    self.tx_cache.insert(tx.txid(), tx.clone());
                     received.insert(outpoint);
                 }
             }

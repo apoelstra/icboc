@@ -110,6 +110,20 @@ impl Serialize for miniscript::bitcoin::OutPoint {
     }
 }
 
+impl Serialize for miniscript::bitcoin::Transaction {
+    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+        // FIXME a later version of rust-bitcoin will just directly return io::Errors here
+        bitcoin::consensus::Encodable::consensus_encode(self, w)
+            .map(|_| ())
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+
+    fn read_from<R: Read>(r: R) -> io::Result<Self> {
+        bitcoin::consensus::Decodable::consensus_decode(r)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
 impl<T: Serialize> Serialize for Vec<T> {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         let len32: u32 = self.len() as u32;
