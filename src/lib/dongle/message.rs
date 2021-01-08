@@ -24,6 +24,7 @@ use miniscript::bitcoin::util::bip32;
 use std::cmp;
 
 use crate::constants::apdu::ledger::{self, Instruction};
+use crate::wallet;
 use crate::Error;
 
 /// A message that can be received from the dongle
@@ -533,14 +534,11 @@ impl Command for GetTrustedInput {
     }
 }
 
-/*
 /// UNTRUSTED HASH TRANSACTION INPUT START message
 pub struct UntrustedHashTransactionInputStart {
-    continuing: bool,
-    ser_inputs: Vec<u8>,
-    cuts: Vec<usize>,
-    sent_cuts: usize,
-    sw: u16
+    ser_inputs: Vec<Vec<u8>>,
+    sent_first: bool,
+    sw: u16,
 }
 
 impl UntrustedHashTransactionInputStart {
@@ -548,47 +546,38 @@ impl UntrustedHashTransactionInputStart {
     /// `index` is the input that we're signing for now. `continuing` should
     /// be set if there are multiple inputs to be signed and this is not the
     /// first
-    pub fn new(spend: &spend::Spend, index: usize, continuing: bool, apdu_size: usize) -> UntrustedHashTransactionInputStart {
-        let (ser_inputs, cuts) = encode_spend_inputs_with_cutpoints(spend, index, apdu_size);
+    pub fn new(
+        tx: &bitcoin::Transaction,
+        index: usize,
+        trusted_input: &super::TrustedInput,
+    ) -> UntrustedHashTransactionInputStart {
+        let mut ser_inputs =
+            super::tx::encode_input(tx, index, trusted_input, ledger::MAX_APDU_SIZE);
+        ser_inputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputStart {
-            continuing: continuing,
             ser_inputs: ser_inputs,
-            cuts: cuts,
-            sent_cuts: 0,
-            sw: 0
+            sent_first: false,
+            sw: 0,
         }
     }
 }
 
 impl Command for UntrustedHashTransactionInputStart {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
-        let mut ret = Vec::with_capacity(apdu_size);
-        ret.push(apdu::ledger::BTCHIP_CLA);
-        ret.push(apdu::ledger::ins::UNTRUSTED_HASH_TRANSACTION_INPUT_START);
-        ret.push(if self.sent_cuts != 0 { 0x80 } else { 0x00 });
-        ret.push(if self.continuing { 0x80 } else { 0x00 });
-        ret.push(0x00);  // Will overwrite this with final length
-
-        // Rest same as for `GetTrustedInput`
-        if self.sent_cuts >= self.cuts.len() {
-            unreachable!();  // sanity check
-        }
-        // We are always looking one cut ahead (and have an extra
-        // "cut" at self.ser_tx.len() for this reason).
-        if self.sent_cuts == self.cuts.len() - 1 {
+        // Done sending everything
+        if self.ser_inputs.is_empty() {
             return None;
         }
 
-        let mut next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
-        while ret.len() + next_cut_len < apdu_size {
-            ret.extend(&self.ser_inputs[self.cuts[self.sent_cuts]..self.cuts[self.sent_cuts + 1]]);
-            self.sent_cuts += 1;
-            if self.sent_cuts < self.cuts.len() - 1 {
-                next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
-            } else {
-                break;
-            }
-        }
+        let mut ret = Vec::with_capacity(apdu_size);
+        ret.push(ledger::BTCHIP_CLA);
+        ret.push(Instruction::UntrustedHashTransactionInputStart.into_u8());
+        ret.push(if self.sent_first { 0x80 } else { 0x00 });
+        ret.push(0x00); // should be 0x80 if we are continuing, but
+        ret.push(0x00); // Will overwrite this with final length
+        ret.extend(self.ser_inputs.pop().unwrap());
+
+        self.sent_first = true;
 
         // Mark size and return
         assert!(ret.len() < apdu_size);
@@ -597,7 +586,10 @@ impl Command for UntrustedHashTransactionInputStart {
     }
 
     fn decode_reply(&mut self, data: Vec<u8>) -> Result<(), Error> {
-        if data.len() != 2 {
+        if data.len() < 2 {
+            return Err(Error::UnexpectedEof);
+        }
+        if data.len() > 2 {
             return Err(Error::Unsupported);
         }
         self.sw = ((data[0] as u16) << 8) + data[1] as u16;
@@ -612,73 +604,56 @@ impl Command for UntrustedHashTransactionInputStart {
 
 /// UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL message
 pub struct UntrustedHashTransactionInputFinalize {
-    need_to_send_change_path: bool,
-    change_path: [u32; 5],
-    ser_outputs: Vec<u8>,
-    cuts: Vec<usize>,
-    sent_cuts: usize,
-    sw: u16
+    ser_outputs: Vec<Vec<u8>>,
+    change_path: Option<bip32::DerivationPath>,
+    sw: u16,
 }
 
 impl UntrustedHashTransactionInputFinalize {
-    /// Constructor: `spend` is a prepared `Spend` object describing what to do.
-    pub fn new(spend: &spend::Spend, apdu_size: usize) -> UntrustedHashTransactionInputFinalize {
-        let (ser_outputs, cuts) = encode_spend_outputs_with_cutpoints(spend, apdu_size);
+    /// Constructor
+    pub fn new(
+        tx: &bitcoin::Transaction,
+        change_address: Option<&wallet::Address>,
+    ) -> UntrustedHashTransactionInputFinalize {
+        let mut ser_outputs = super::tx::encode_outputs(tx, ledger::MAX_APDU_SIZE);
+        ser_outputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputFinalize {
-            need_to_send_change_path: spend.change_amount > 0,
-            change_path: spend.change_path,
             ser_outputs: ser_outputs,
-            cuts: cuts,
-            sent_cuts: 0,
-            sw: 0
+            change_path: change_address.and_then(wallet::Address::change_path),
+            sw: 0,
         }
     }
 }
 
 impl Command for UntrustedHashTransactionInputFinalize {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
-        let mut ret = Vec::with_capacity(apdu_size);
-        ret.push(apdu::ledger::BTCHIP_CLA);
-        ret.push(apdu::ledger::ins::UNTRUSTED_HASH_TRANSACTION_INPUT_FINALIZE);
+        // Done sending everything
+        if self.ser_outputs.is_empty() {
+            return None;
+        }
 
-        if self.need_to_send_change_path {
-            self.need_to_send_change_path = false;
+        let mut ret = Vec::with_capacity(apdu_size);
+        ret.push(ledger::BTCHIP_CLA);
+        ret.push(Instruction::UntrustedHashTransactionInputFinalize.into_u8());
+
+        if let Some(path) = self.change_path.take() {
+            let cnums: &[bip32::ChildNumber] = path.as_ref();
+
             ret.push(0xff);
             ret.push(0x00);
-            ret.push((1 + 4 * self.change_path.len()) as u8);
-            ret.push(self.change_path.len() as u8);
-            for childnum in &self.change_path[..] {
-                let _ = ret.write_u32::<BigEndian>(*childnum);
+            ret.push((1 + 4 * cnums.len()) as u8);
+            ret.push(cnums.len() as u8);
+            for &childnum in cnums {
+                let _ = ret.write_u32::<BigEndian>(childnum.into());
             }
             Some(ret)
         } else {
-            ret.push(0x00);  // Will overwrite this with 0x80 on final message
+            ret.push(0x00); // Will overwrite this with 0x80 on final message
             ret.push(0x00);
-            ret.push(0x00);  // Will overwrite this with length
+            ret.push(0x00); // Will overwrite this with length
+            ret.extend(self.ser_outputs.pop().unwrap());
 
-            // Rest same as for `GetTrustedInput`
-            if self.sent_cuts >= self.cuts.len() {
-                unreachable!();  // sanity check
-            }
-            // We are always looking one cut ahead (and have an extra
-            // "cut" at self.ser_tx.len() for this reason).
-            if self.sent_cuts == self.cuts.len() - 1 {
-                return None;
-            }
-
-            let mut next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
-            while ret.len() + next_cut_len < apdu_size {
-                ret.extend(&self.ser_outputs[self.cuts[self.sent_cuts]..self.cuts[self.sent_cuts + 1]]);
-                self.sent_cuts += 1;
-                if self.sent_cuts < self.cuts.len() - 1 {
-                    next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
-                } else {
-                    break;
-                }
-            }
-
-            // Mark size and return
-            if self.sent_cuts == self.cuts.len() - 1 {
+            if self.ser_outputs.is_empty() {
                 ret[2] = 0x80;
             }
             assert!(ret.len() < apdu_size);
@@ -707,32 +682,34 @@ impl Command for UntrustedHashTransactionInputFinalize {
 
 /// UNTRUSTED HASH SIGN  message
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UntrustedHashSign {
+pub struct UntrustedHashSign<'a> {
     sent: bool,
     reply: Vec<u8>,
     sw: u16,
-    bip32_path: [u32; 5],
-    sighash: SigHashType,
-    locktime: u32
+    bip32_path: &'a [bip32::ChildNumber],
+    sighash: bitcoin::SigHashType,
+    tx_locktime: u32,
 }
 
-impl UntrustedHashSign {
+impl<'a> UntrustedHashSign<'a> {
     /// Constructor
-    pub fn new(bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> UntrustedHashSign {
-        assert!(bip32_path.len() < 11);  // limitation of the Nano S
-
+    pub fn new<P: AsRef<[bip32::ChildNumber]>>(
+        bip32_path: &'a P,
+        sighash: bitcoin::SigHashType,
+        tx_locktime: u32,
+    ) -> Self {
         UntrustedHashSign {
             sent: false,
             reply: vec![],
             sw: 0,
-            bip32_path: bip32_path,
+            bip32_path: &bip32_path.as_ref(),
             sighash: sighash,
-            locktime: locktime
+            tx_locktime: tx_locktime,
         }
     }
 }
 
-impl Command for UntrustedHashSign {
+impl<'a> Command for UntrustedHashSign<'a> {
     fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;
@@ -740,17 +717,17 @@ impl Command for UntrustedHashSign {
         self.sent = true;
 
         let mut ret = Vec::with_capacity(5 + 4 * self.bip32_path.len());
-        ret.push(apdu::ledger::BTCHIP_CLA);
-        ret.push(apdu::ledger::ins::UNTRUSTED_HASH_SIGN);
+        ret.push(ledger::BTCHIP_CLA);
+        ret.push(Instruction::UntrustedHashSign.into_u8());
         ret.push(0x00);
         ret.push(0x00);
         ret.push((1 + 4 * self.bip32_path.len() + 6) as u8);
         ret.push(self.bip32_path.len() as u8);
-        for childnum in &self.bip32_path {
-            let _ = ret.write_u32::<BigEndian>(*childnum);
+        for &childnum in self.bip32_path {
+            let _ = ret.write_u32::<BigEndian>(childnum.into());
         }
         ret.push(0x00); // user validation code
-        let _ = ret.write_u32::<BigEndian>(self.locktime);
+        let _ = ret.write_u32::<BigEndian>(self.tx_locktime);
         ret.push(self.sighash.as_u32() as u8);
         Some(ret)
     }
@@ -770,69 +747,3 @@ impl Command for UntrustedHashSign {
         (self.sw, self.reply)
     }
 }
-
-/// SET ALTERNATE COIN VERSIONS message
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SetAlternateCoinVersions {
-    sent: bool,
-    sw: u16,
-    pubkey_version: u16,
-    script_version: u16
-}
-
-impl SetAlternateCoinVersions {
-    /// Constructor
-    pub fn new(network: Network) -> SetAlternateCoinVersions {
-        match network {
-            Network::Bitcoin => {
-                SetAlternateCoinVersions {
-                    sent: false,
-                    sw: 0,
-                    pubkey_version: 0,
-                    script_version: 5
-                }
-            }
-            Network::Testnet | Network::Regtest => {
-                SetAlternateCoinVersions {
-                    sent: false,
-                    sw: 0,
-                    pubkey_version: 111,
-                    script_version: 196
-                }
-            }
-        }
-    }
-}
-
-impl Command for SetAlternateCoinVersions {
-    fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
-        if self.sent {
-            return None;
-        }
-        self.sent = true;
-
-        let mut ret = Vec::with_capacity(7);
-        ret.push(apdu::ledger::BTCHIP_CLA);
-        ret.push(apdu::ledger::ins::SET_ALTERNATE_COIN_VERSION);
-        ret.push(0x00);
-        ret.push(0x00);
-        ret.push(0x05);
-        let _ = ret.write_u16::<BigEndian>(self.pubkey_version);
-        let _ = ret.write_u16::<BigEndian>(self.script_version);
-        ret.push(0x01);  // "Bitcoin family"
-        Some(ret)
-    }
-
-    fn decode_reply(&mut self, data: Vec<u8>) -> Result<(), Error> {
-        if data.len() != 2 {
-            return Err(Error::UnexpectedEof);
-        }
-        self.sw = ((data[0] as u16) << 8) + data[1] as u16;
-        Ok(())
-    }
-
-    fn into_reply(self) -> (u16, Vec<u8>) {
-        (self.sw, vec![])
-    }
-}
-*/

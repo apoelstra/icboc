@@ -73,4 +73,6 @@ pub enum Error {
     UserRefusedSignMessage,
     #[error("unexpected end-of-data")]
     UnexpectedEof,
+    #[error("device did something we do not support")]
+    Unsupported,
 }

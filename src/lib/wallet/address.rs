@@ -37,6 +37,16 @@ pub struct Address {
     pub user_data: Mutex<Option<UserData>>,
 }
 
+impl Address {
+    /// If this address is a p2pkh address or p2wpkh, the derivation path to it
+    pub fn change_path(&self) -> Option<bitcoin::util::bip32::DerivationPath> {
+        match self.descriptor.desc {
+            miniscript::Descriptor::Pkh(ref pkh) => Some(pkh.as_inner().full_derivation_path()),
+            _ => None,
+        }
+    }
+}
+
 impl PartialEq for Address {
     fn eq(&self, other: &Self) -> bool {
         self.descriptor == other.descriptor && self.index == other.index

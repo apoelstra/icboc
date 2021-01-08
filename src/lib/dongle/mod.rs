@@ -22,13 +22,34 @@ use miniscript::bitcoin::util::bip32;
 use miniscript::{self, bitcoin};
 
 use self::message::{Command, Response};
+use crate::constants::apdu::ledger as ledger_const;
 use crate::util::parse_ledger_signature;
-use crate::{constants, Error, KeyCache};
-//use spend::Spend;
+use crate::wallet;
+use crate::{Error, KeyCache};
 
 pub mod ledger;
 pub mod message;
 mod tx;
+
+/// Data that needs to be provided to the Ledger when
+/// signing for a legacy input
+#[derive(Debug)]
+pub struct TrustedInput {
+    /// Opaque blob provided by the ledger in response to the
+    /// `get_trusted_input` call
+    blob: [u8; 56],
+    /// ScriptPubKey of the output being spent
+    script_pubkey: bitcoin::Script,
+}
+
+impl Default for TrustedInput {
+    fn default() -> Self {
+        TrustedInput {
+            blob: [0; 56],
+            script_pubkey: bitcoin::Script::new(),
+        }
+    }
+}
 
 /// Trait representing an abstroct hardware wallet
 pub trait Dongle {
@@ -40,11 +61,11 @@ pub trait Dongle {
     fn get_firmware_version(&mut self) -> Result<message::FirmwareVersion, Error> {
         let command = message::GetFirmwareVersion::new();
         let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
+        if sw == ledger_const::sw::OK {
             message::FirmwareVersion::decode(&rev)
         } else {
             Err(Error::ResponseBadStatus {
-                apdu: constants::apdu::ledger::Instruction::GetFirmwareVersion,
+                apdu: ledger_const::Instruction::GetFirmwareVersion,
                 status: sw,
             })
         }
@@ -58,11 +79,11 @@ pub trait Dongle {
     ) -> Result<message::WalletPublicKey, Error> {
         let command = message::GetWalletPublicKey::new(bip32_path, display);
         let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
+        if sw == ledger_const::sw::OK {
             message::WalletPublicKey::decode(&rev)
         } else {
             Err(Error::ResponseBadStatus {
-                apdu: constants::apdu::ledger::Instruction::GetWalletPublicKey,
+                apdu: ledger_const::Instruction::GetWalletPublicKey,
                 status: sw,
             })
         }
@@ -72,13 +93,13 @@ pub trait Dongle {
     fn get_random_nonce(&mut self) -> Result<[u8; 12], Error> {
         let command = message::GetRandom::new(12);
         let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
+        if sw == ledger_const::sw::OK {
             let mut res = [0; 12];
             res.copy_from_slice(&rev[..]);
             Ok(res)
         } else {
             Err(Error::ResponseBadStatus {
-                apdu: constants::apdu::ledger::Instruction::GetRandom,
+                apdu: ledger_const::Instruction::GetRandom,
                 status: sw,
             })
         }
@@ -99,6 +120,7 @@ pub trait Dongle {
 
                 let fingerprint = key.master_fingerprint();
                 let key_full_path = key.full_derivation_path();
+                assert!(key_full_path.len() < 11); // limitation of the Nano S
 
                 // Check for fingerprint mismatch
                 let master_xpub = self.get_master_xpub()?;
@@ -159,9 +181,9 @@ pub trait Dongle {
         let command = message::SignMessagePrepare::new(bip32_path, message);
         let (sw, rev) = self.exchange(command)?;
         // This should never happen unless we exceed Ledger limits
-        if sw != constants::apdu::ledger::sw::OK {
+        if sw != ledger_const::sw::OK {
             return Err(Error::ResponseBadStatus {
-                apdu: constants::apdu::ledger::Instruction::SignMessage,
+                apdu: ledger_const::Instruction::SignMessage,
                 status: sw,
             });
         }
@@ -173,10 +195,10 @@ pub trait Dongle {
         let command = message::SignMessageSign::new();
         let (sw, mut rev) = self.exchange(command)?;
         match sw {
-            constants::apdu::ledger::sw::OK => Ok(parse_ledger_signature(&mut rev)?),
-            constants::apdu::ledger::sw::SIGN_REFUSED => Err(Error::UserRefusedSignMessage),
+            ledger_const::sw::OK => Ok(parse_ledger_signature(&mut rev)?),
+            ledger_const::sw::SIGN_REFUSED => Err(Error::UserRefusedSignMessage),
             sw => Err(Error::ResponseBadStatus {
-                apdu: constants::apdu::ledger::Instruction::SignMessage,
+                apdu: ledger_const::Instruction::SignMessage,
                 status: sw,
             }),
         }
@@ -192,61 +214,91 @@ pub trait Dongle {
         &mut self,
         tx: &bitcoin::Transaction,
         vout: u32,
-    ) -> Result<[u8; 56], Error> {
+    ) -> Result<TrustedInput, Error> {
         let command = message::GetTrustedInput::new(tx, vout);
         let (sw, rev) = self.exchange(command)?;
-        if sw == constants::apdu::ledger::sw::OK {
+        if sw == ledger_const::sw::OK {
             if rev.len() == 56 {
-                let mut ret = [0; 56];
-                ret.copy_from_slice(&rev[..]);
+                let mut ret = TrustedInput::default();
+                ret.blob.copy_from_slice(&rev[..]);
+                ret.script_pubkey = tx.output[vout as usize].script_pubkey.clone();
                 Ok(ret)
             } else {
                 Err(Error::ResponseWrongLength {
-                    apdu: constants::apdu::ledger::Instruction::GetTrustedInput,
+                    apdu: ledger_const::Instruction::GetTrustedInput,
                     expected: 56..57,
                     found: rev.len(),
                 })
             }
         } else {
             Err(Error::ResponseBadStatus {
-                apdu: constants::apdu::ledger::Instruction::GetTrustedInput,
+                apdu: ledger_const::Instruction::GetTrustedInput,
                 status: sw,
             })
         }
     }
 
-    /*
-        /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
-        fn transaction_input_start(&mut self, spend: &Spend, index: usize, continuing: bool) -> Result<(), Error> {
-            let command = message::UntrustedHashTransactionInputStart::new(spend, index, continuing, constants::apdu::ledger::MAX_APDU_SIZE);
-            let (sw, _) = self.exchange(command)?;
-            if sw == constants::apdu::ledger::sw::OK {
-                Ok(())
-            } else {
-                Err(Error::ApduBadStatus(sw))
-            }
+    /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
+    ///
+    /// When signing a transaction, for each input you send this message,
+    /// followed by `INPUT FINALIZE FULL`, followed by `SIGN`. For the
+    /// the first input you set `continuing` to `false`, after that you
+    /// set it to `true`.
+    ///
+    /// It is best not to call this directly, instead calling the wrapper
+    /// function TODO
+    fn transaction_input_start(
+        &mut self,
+        tx: &bitcoin::Transaction,
+        index: usize,
+        trusted_input: &TrustedInput,
+    ) -> Result<(), Error> {
+        let command = message::UntrustedHashTransactionInputStart::new(tx, index, trusted_input);
+        let (sw, _) = self.exchange(command)?;
+        if sw == ledger_const::sw::OK {
+            Ok(())
+        } else {
+            Err(Error::ResponseBadStatus {
+                apdu: ledger_const::Instruction::UntrustedHashTransactionInputStart,
+                status: sw,
+            })
         }
+    }
 
-        /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL` command
-        fn transaction_input_finalize(&mut self, spend: &Spend) -> Result<(), Error> {
-            let command = message::UntrustedHashTransactionInputFinalize::new(spend, constants::apdu::ledger::MAX_APDU_SIZE);
-            let (sw, _) = self.exchange(command)?;
-            if sw == constants::apdu::ledger::sw::OK {
-                Ok(())
-            } else {
-                Err(Error::ApduBadStatus(sw))
-            }
+    /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT FINALIZE FULL` command
+    fn transaction_input_finalize(
+        &mut self,
+        tx: &bitcoin::Transaction,
+        change_address: Option<&wallet::Address>,
+    ) -> Result<(), Error> {
+        let command = message::UntrustedHashTransactionInputFinalize::new(tx, change_address);
+        let (sw, _) = self.exchange(command)?;
+        if sw == ledger_const::sw::OK {
+            Ok(())
+        } else {
+            Err(Error::ResponseBadStatus {
+                apdu: ledger_const::Instruction::UntrustedHashTransactionInputFinalize,
+                status: sw,
+            })
         }
+    }
 
-        /// Sends the device a `UNTRUSTED HASH SIGN` command
-        fn transaction_sign(&mut self, bip32_path: [u32; 5], sighash: SigHashType, locktime: u32) -> Result<Vec<u8>, Error> {
-            let command = message::UntrustedHashSign::new(bip32_path, sighash, locktime);
-            let (sw, rev) = self.exchange(command)?;
-            if sw == constants::apdu::ledger::sw::OK {
-                Ok(rev)
-            } else {
-                Err(Error::ApduBadStatus(sw))
-            }
+    /// Sends the device a `UNTRUSTED HASH SIGN` command
+    fn transaction_sign<P: AsRef<[bip32::ChildNumber]>>(
+        &mut self,
+        bip32_path: &P,
+        sighash: bitcoin::SigHashType,
+        tx_locktime: u32,
+    ) -> Result<Vec<u8>, Error> {
+        let command = message::UntrustedHashSign::new(bip32_path, sighash, tx_locktime);
+        let (sw, rev) = self.exchange(command)?;
+        if sw == ledger_const::sw::OK {
+            Ok(rev)
+        } else {
+            Err(Error::ResponseBadStatus {
+                apdu: ledger_const::Instruction::UntrustedHashSign,
+                status: sw,
+            })
         }
-    */
+    }
 }
