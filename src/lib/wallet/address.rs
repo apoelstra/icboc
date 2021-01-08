@@ -32,7 +32,7 @@ pub struct Address {
     pub index: u32,
     /// The instantiated descriptor (with concrete public keys) corresponding
     /// to this address
-    pub instantiated_descriptor: miniscript::Descriptor<bitcoin::PublicKey>,
+    pub instantiated_descriptor: miniscript::Descriptor<super::CachedKey>,
     /// User data
     pub user_data: Mutex<Option<UserData>>,
 }

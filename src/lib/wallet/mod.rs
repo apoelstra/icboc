@@ -21,14 +21,15 @@ mod address;
 mod encode;
 mod txo;
 
-use miniscript::bitcoin;
-use miniscript::{self, DescriptorTrait, ForEachKey, TranslatePk2};
+use miniscript::bitcoin::{self, hashes::hash160};
+use miniscript::{self, DescriptorTrait, TranslatePk2};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::{
     cmp,
     collections::hash_map::Entry,
+    fmt,
     io::{Read, Seek, Write},
     sync::{Arc, Mutex},
 };
@@ -108,9 +109,7 @@ impl Wallet {
                 // Re-cache all keys, which should be a no-op, but may help to
                 // recover in case the dongle was malfunctioning the last time the
                 // cache was created).
-                ret.cache_keys(&mut *dongle, &desc_arc.desc, wildcard_idx);
-                // Create the address entry
-                let inst = ret.instantiate_from_cache(&desc_arc.desc, wildcard_idx)?;
+                let inst = ret.cache_keys(&mut *dongle, &desc_arc.desc, wildcard_idx)?;
                 let new_addr = Arc::new(Address {
                     descriptor: desc_arc.clone(),
                     index: wildcard_idx,
@@ -266,31 +265,17 @@ impl Wallet {
         dongle: &mut D,
         desc: &miniscript::Descriptor<miniscript::DescriptorPublicKey>,
         index: u32,
-    ) {
+    ) -> Result<miniscript::Descriptor<CachedKey>, Error> {
         let dongle = RefCell::new(dongle);
         let key_cache = RefCell::new(&mut self.key_cache);
-        desc.for_each_key(|key| {
-            Wallet::cache_key(
-                *dongle.borrow_mut(),
-                *key_cache.borrow_mut(),
-                &key.as_key().clone().derive(index),
-            )
-            .is_ok()
-        });
-    }
-
-    fn instantiate_from_cache(
-        &self,
-        descriptor: &miniscript::Descriptor<miniscript::DescriptorPublicKey>,
-        index: u32,
-    ) -> Result<miniscript::Descriptor<bitcoin::PublicKey>, Error> {
-        let inst = descriptor.derive(index).translate_pk2(|key| {
-            match self.key_cache.lookup_descriptor_pubkey(key) {
-                Some(pk) => Ok(pk),
-                None => Err(Error::KeyNotFound(key.clone())),
-            }
-        })?;
-        Ok(inst)
+        desc.translate_pk2(|key| {
+            let derived = key.clone().derive(index);
+            Ok(CachedKey {
+                key: Wallet::cache_key(*dongle.borrow_mut(), *key_cache.borrow_mut(), &derived)?,
+                desc_key: derived,
+                index: index,
+            })
+        })
     }
 
     /// Adds a new descriptor to the wallet. Returns the number of new keys
@@ -314,23 +299,33 @@ impl Wallet {
             }
         }
 
-        let mut added_new = 0;
-        for i in low..high {
-            if !existing_indices.contains(&i) {
-                added_new += 1;
-                self.cache_keys(&mut *dongle, &desc, i);
-            }
-        }
-
         let idx = self.descriptors.len();
-        self.descriptors.push(Arc::new(Descriptor {
+        let desc_arc = Arc::new(Descriptor {
             desc: desc,
             wallet_idx: idx,
             low: low,
             high: high,
             next_idx: Mutex::new(0),
-        }));
+        });
 
+        let mut added_new = 0;
+        for i in low..high {
+            if !existing_indices.contains(&i) {
+                added_new += 1;
+                let inst = self.cache_keys(&mut *dongle, &desc_arc.desc, i)?;
+                let new_addr = Arc::new(Address {
+                    descriptor: desc_arc.clone(),
+                    index: i,
+                    instantiated_descriptor: inst,
+                    user_data: Mutex::new(None),
+                });
+                self.descriptor_address.insert((idx, i), new_addr.clone());
+                self.spk_address
+                    .insert(new_addr.instantiated_descriptor.script_pubkey(), new_addr);
+            }
+        }
+
+        self.descriptors.push(desc_arc);
         Ok(added_new)
     }
 
@@ -342,12 +337,22 @@ impl Wallet {
         time: String,
         notes: String,
     ) -> Result<Arc<Address>, Error> {
-        let mut next_idx = self.descriptors[descriptor_idx].next_idx.lock().unwrap();
-        let wildcard_idx = wildcard_idx.unwrap_or(*next_idx);
-        *next_idx = cmp::max(*next_idx, wildcard_idx) + 1;
+        let wildcard_idx = {
+            let mut next_idx = self.descriptors[descriptor_idx].next_idx.lock().unwrap();
+            let wildcard_idx = wildcard_idx.unwrap_or(*next_idx);
+            *next_idx = cmp::max(*next_idx, wildcard_idx) + 1;
+            wildcard_idx
+        };
 
         let desc_arc = self.descriptors[descriptor_idx].clone();
-        let inst = self.instantiate_from_cache(&desc_arc.desc, wildcard_idx)?;
+        let inst = desc_arc.desc.translate_pk2_infallible(|key| {
+            let derived = key.clone().derive(wildcard_idx);
+            CachedKey {
+                key: self.key_cache.lookup_descriptor_pubkey(&derived).unwrap(),
+                desc_key: derived,
+                index: wildcard_idx,
+            }
+        });
         let spk = inst.script_pubkey();
 
         let new_addr = Arc::new(Address {
@@ -438,6 +443,40 @@ impl Wallet {
         }
 
         Ok((received, spent))
+    }
+}
+
+/// A public key known by the wallet
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CachedKey {
+    /// The descriptor key (which may have wildcards in it)
+    pub desc_key: miniscript::DescriptorPublicKey,
+    /// Index of this key in the above publickey
+    pub index: u32,
+    /// Cached copy of the resulting bitcoin PublicKey
+    pub key: bitcoin::PublicKey,
+}
+
+impl fmt::Display for CachedKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.desc_key.fmt(f)
+    }
+}
+
+impl miniscript::MiniscriptKey for CachedKey {
+    type Hash = Self;
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        self.clone()
+    }
+}
+
+impl miniscript::ToPublicKey for CachedKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        self.key
+    }
+
+    fn hash_to_hash160(hash: &<Self as miniscript::MiniscriptKey>::Hash) -> hash160::Hash {
+        miniscript::MiniscriptKey::to_pubkeyhash(&hash.to_public_key())
     }
 }
 
