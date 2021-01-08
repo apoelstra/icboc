@@ -273,7 +273,6 @@ impl Wallet {
             Ok(CachedKey {
                 key: Wallet::cache_key(*dongle.borrow_mut(), *key_cache.borrow_mut(), &derived)?,
                 desc_key: derived,
-                index: index,
             })
         })
     }
@@ -350,7 +349,6 @@ impl Wallet {
             CachedKey {
                 key: self.key_cache.lookup_descriptor_pubkey(&derived).unwrap(),
                 desc_key: derived,
-                index: wildcard_idx,
             }
         });
         let spk = inst.script_pubkey();
@@ -449,10 +447,8 @@ impl Wallet {
 /// A public key known by the wallet
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CachedKey {
-    /// The descriptor key (which may have wildcards in it)
+    /// Instantiated descriptor
     pub desc_key: miniscript::DescriptorPublicKey,
-    /// Index of this key in the above publickey
-    pub index: u32,
     /// Cached copy of the resulting bitcoin PublicKey
     pub key: bitcoin::PublicKey,
 }

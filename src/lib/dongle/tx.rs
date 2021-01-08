@@ -78,11 +78,9 @@ pub fn encode_tx(tx: &bitcoin::Transaction, piece_len: usize) -> Vec<Vec<u8>> {
     for input in &tx.input {
         // When encoding inputs, we are not allowed to split within the
         // outpoint or before the scriptSig. So we encode those as a
-        // single chunk, followed by the sequence. Annoyingly, this
-        // requires a clone since none of the borrowed forms of Script
-        // implement Encodable.
+        // single chunk, followed by the sequence.
         cur = encode(
-            &(input.previous_output, input.script_sig.clone()),
+            &(input.previous_output, &input.script_sig),
             cur,
             &mut ret,
             piece_len,
@@ -116,18 +114,18 @@ pub fn encode_input(
     cur = encode(&tx.version, cur, &mut ret, piece_len);
     cur = encode(&varint(tx.input.len()), cur, &mut ret, piece_len);
     for (n, input) in tx.input.iter().enumerate() {
+        let dummy = bitcoin::Script::new();
         let spk = if n == index {
-            trusted_input.script_pubkey.clone() // clone required for same reason as scriptSig above
+            &trusted_input.script_pubkey
         } else {
-            bitcoin::Script::new()
+            &dummy
         };
         cur = encode(
             // 1u8 is a "legacy" flag, i.e. trusted input to follow
             // TODO check if we have a segwit spk and use its value instead
             &(
                 1u8,
-                trusted_input.blob.len() as u8,
-                trusted_input.blob.to_vec(),
+                trusted_input.blob.to_vec(), // Encodable not implemented on &[u8]
                 spk,
             ),
             cur,

@@ -40,8 +40,10 @@ pub struct Address {
 impl Address {
     /// If this address is a p2pkh address or p2wpkh, the derivation path to it
     pub fn change_path(&self) -> Option<bitcoin::util::bip32::DerivationPath> {
-        match self.descriptor.desc {
-            miniscript::Descriptor::Pkh(ref pkh) => Some(pkh.as_inner().full_derivation_path()),
+        match self.instantiated_descriptor {
+            miniscript::Descriptor::Pkh(ref pkh) => {
+                Some(pkh.as_inner().desc_key.full_derivation_path())
+            }
             _ => None,
         }
     }

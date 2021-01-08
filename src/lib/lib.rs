@@ -41,7 +41,7 @@ pub use dongle::ledger;
 pub use dongle::Dongle;
 pub use error::Error;
 pub use util::{parse_ledger_signature, parse_ledger_signature_recoverable};
-pub use wallet::{Descriptor, Wallet};
+pub use wallet::{Address, CachedKey, Descriptor, Txo, Wallet};
 
 // Re-export all the hidapi types because the double `hidapi::HidDevice`
 // naming bugs me

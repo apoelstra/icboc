@@ -289,11 +289,12 @@ pub trait Dongle {
         bip32_path: &P,
         sighash: bitcoin::SigHashType,
         tx_locktime: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<secp256k1::Signature, Error> {
         let command = message::UntrustedHashSign::new(bip32_path, sighash, tx_locktime);
-        let (sw, rev) = self.exchange(command)?;
+        let (sw, mut rev) = self.exchange(command)?;
         if sw == ledger_const::sw::OK {
-            Ok(rev)
+            rev[0] = 0x30;
+            secp256k1::Signature::from_der_lax(&rev).map_err(Error::from)
         } else {
             Err(Error::ResponseBadStatus {
                 apdu: ledger_const::Instruction::UntrustedHashSign,
