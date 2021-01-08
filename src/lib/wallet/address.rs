@@ -17,108 +17,73 @@
 //! Information associated to a wallet-generated address
 //!
 
-use crate::Error;
-use miniscript::{bitcoin, DescriptorTrait};
-use std::{cmp, fmt, sync::Arc};
+use miniscript::{self, bitcoin, DescriptorTrait};
+use std::{
+    cmp, fmt,
+    sync::{Arc, Mutex},
+};
 
 /// A (potentially spent) transaction output tracked by the wallet
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Address {
     /// Descriptor that generates this address
     pub descriptor: Arc<super::Descriptor>,
     /// If the descriptor has wildcards, index into it
     pub index: u32,
-    /// Time that the address was created, in format YYYY-MM-DD HH:MM:SS+ZZZZ
-    pub time: String,
-    /// User-provided notes about this address
-    pub notes: String,
+    /// The instantiated descriptor (with concrete public keys) corresponding
+    /// to this address
+    pub instantiated_descriptor: miniscript::Descriptor<bitcoin::PublicKey>,
+    /// User data
+    pub user_data: Mutex<Option<UserData>>,
 }
 
-impl Address {
-    /// Accessor for the time the address was created at
-    pub fn create_time(&self) -> &str {
-        &self.time
+impl PartialEq for Address {
+    fn eq(&self, other: &Self) -> bool {
+        self.descriptor == other.descriptor && self.index == other.index
     }
+}
+impl Eq for Address {}
 
-    /// Accessor for the notes associated with the address
-    pub fn notes(&self) -> &str {
-        &self.notes
-    }
-
-    /// User-displayable information
-    pub fn info<'w>(&self, wallet: &'w super::Wallet) -> Result<AddressInfo<'w>, Error> {
-        let inst = wallet.instantiate_from_cache(&self.descriptor.desc, self.index)?;
-
-        Ok(AddressInfo {
-            descriptor: self.descriptor.clone(),
-            wildcard_idx: self.index,
-            inst_descriptor: inst,
-            wallet: wallet,
-        })
+impl Ord for Address {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        fn sort_key(obj: &Address) -> impl Ord {
+            (obj.descriptor.wallet_idx, obj.index)
+        }
+        sort_key(self).cmp(&sort_key(other))
     }
 }
 
-/// Address wrapper used for user display
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AddressInfo<'wallet> {
-    /// Index into the wallet-global descriptor array
-    descriptor: Arc<super::Descriptor>,
-    /// If the descriptor has wildcards, index into it
-    wildcard_idx: u32,
-    /// Instantiated descriptor with fixed public keys
-    inst_descriptor: miniscript::Descriptor<bitcoin::PublicKey>,
-    /// Pointer to the owning wallet
-    wallet: &'wallet super::Wallet,
-}
-
-impl<'wallet> AddressInfo<'wallet> {
-    /// Accessor for the creation time of the address, if known
-    pub fn create_time(&self) -> Option<&str> {
-        self.wallet
-            .spk_address
-            .get(&self.inst_descriptor.script_pubkey())
-            .map(|addr| &addr.time[..])
+impl PartialOrd for Address {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
-impl<'wallet> fmt::Display for AddressInfo<'wallet> {
+impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let spk = self.inst_descriptor.script_pubkey();
+        let spk = self.instantiated_descriptor.script_pubkey();
+        let address = bitcoin::Address::from_script(&spk, bitcoin::Network::Bitcoin).unwrap();
         write!(
             f,
             "{{ address: \"{}\", script_pubkey: \"{:x}\"",
-            self.inst_descriptor
-                .address(bitcoin::Network::Bitcoin)
-                .unwrap(),
-            spk,
+            address, spk,
         )?;
-        if let Some(addr) = self.wallet.spk_address.get(&spk) {
+        if let Some(ref data) = *self.user_data.lock().unwrap() {
             write!(
                 f,
                 " notes: \"{}\", address_created_at: \"{}\"",
-                addr.notes, addr.time,
+                data.notes, data.time,
             )?;
         }
         f.write_str(" }")
     }
 }
 
-impl<'wallet> Ord for AddressInfo<'wallet> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        fn sort_key<'a>(obj: &'a AddressInfo<'a>) -> impl Ord + 'a {
-            (
-                obj.create_time(),
-                &obj.descriptor.desc,
-                obj.wildcard_idx,
-                &obj.inst_descriptor,
-            )
-        }
-        sort_key(self).cmp(&sort_key(other))
-    }
-}
-
-impl<'wallat> PartialOrd for AddressInfo<'wallat> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+/// Data that a user has attached to an address upon "creating" it
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserData {
+    /// Time that the address was created, in format YYYY-MM-DD HH:MM:SS+ZZZZ
+    pub time: String,
+    /// User-provided notes about this address
+    pub notes: String,
 }

@@ -18,7 +18,6 @@
 //!
 
 use crate::rpc;
-use anyhow::Context;
 use icboc::Dongle;
 use miniscript::bitcoin;
 use serde::Deserialize;
@@ -56,10 +55,10 @@ impl super::Command for Info {
                 let mut n_spent = 0;
                 let mut balance = 0;
                 for txo in &txos {
-                    if txo.spending_txid().is_some() {
+                    if txo.spent_data.is_some() {
                         n_spent += 1;
                     } else {
-                        balance += txo.value();
+                        balance += txo.value;
                     }
                 }
                 println!("  {:4} {}", desc.wallet_idx, desc.desc);
@@ -70,11 +69,7 @@ impl super::Command for Info {
                 full_balance += balance;
             }
         }
-        let mut addresses = Vec::with_capacity(wallet.n_addresses());
-        for addr in wallet.addresses() {
-            let addr = addr.info(&wallet).context("looking up address info")?;
-            addresses.push(addr);
-        }
+        let mut addresses: Vec<_> = wallet.addresses().collect();
         if !addresses.is_empty() {
             addresses.sort();
             for addr in &addresses {

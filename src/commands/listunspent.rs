@@ -18,7 +18,7 @@
 //!
 
 use crate::rpc;
-use icboc::{Dongle, TxoInfo};
+use icboc::Dongle;
 use miniscript::bitcoin;
 use serde::Deserialize;
 use std::path::Path;
@@ -47,8 +47,8 @@ impl super::Command for ListUnspent {
 
         let full_balance = all_txos
             .iter()
-            .filter(|txo| txo.is_unspent())
-            .map(TxoInfo::value)
+            .filter(|txo| txo.spent_data.is_none())
+            .map(|txo| txo.value)
             .sum::<u64>();
 
         for txo in all_txos {
