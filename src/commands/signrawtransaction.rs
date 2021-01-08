@@ -57,6 +57,18 @@ impl super::Command for SignRawTransaction {
                 .txo(input.previous_output)
                 .with_context(|| format!("looking up {} in wallet", input.previous_output))?;
             println!("input: {}", txo);
+            let tx = wallet.tx(input.previous_output.txid).with_context(|| {
+                format!("looking up {} in tx cache", input.previous_output.txid)
+            })?;
+            let trusted_input = dongle
+                .get_trusted_input(&tx, input.previous_output.vout)
+                .with_context(|| {
+                    format!(
+                        "asking the the dongle for a trusted input for {}",
+                        input.previous_output
+                    )
+                })?;
+            println!("trusted input: {:?}", trusted_input);
         }
 
         for output in &tx.output {

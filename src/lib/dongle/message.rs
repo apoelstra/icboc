@@ -25,10 +25,6 @@ use std::cmp;
 
 use crate::constants::apdu::ledger::{self, Instruction};
 use crate::Error;
-/*
-use spend;
-use util::{encode_transaction_with_cutpoints, encode_spend_inputs_with_cutpoints, encode_spend_outputs_with_cutpoints};
-*/
 
 /// A message that can be received from the dongle
 pub trait Response: Sized {
@@ -471,69 +467,48 @@ impl Command for GetRandom {
     }
 }
 
-/*
-/// GET RANDOM message
+/// GET TRUSTED INPUT message
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetTrustedInput {
-    sent_cuts: usize,
     reply: Vec<u8>,
     sw: u16,
-    ser_tx: Vec<u8>,
-    cuts: Vec<usize>,
-    vout: u32
+    ser_tx: Vec<Vec<u8>>,
+    // On the first call to `encode_next` we send the vout index. We
+    // use an Option to keep track of whether we've already done this.
+    vout: Option<u32>,
 }
 
 impl GetTrustedInput {
-    /// Constructor: ser_tx is the full transaction, vout is the index of the output we care about
-    pub fn new(tx: &Transaction, vout: u32, apdu_size: usize) -> GetTrustedInput {
-        let (ser_tx, cuts) = encode_transaction_with_cutpoints(tx, apdu_size - 9);
+    /// Constructor
+    pub fn new(tx: &bitcoin::Transaction, vout: u32) -> GetTrustedInput {
+        let mut ser_tx = super::tx::encode_tx(tx, ledger::MAX_APDU_SIZE - 9);
+        ser_tx.reverse(); // Reverse the order of the cuts so we can send them by popping
         GetTrustedInput {
-            sent_cuts: 0,
             reply: vec![],
             sw: 0,
             ser_tx: ser_tx,
-            cuts: cuts,
-            vout: vout
+            vout: Some(vout),
         }
     }
 }
 
 impl Command for GetTrustedInput {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
-        if self.sent_cuts >= self.cuts.len() {
-            unreachable!();  // sanity check
-        }
-        // We are always looking one cut ahead (and have an extra
-        // "cut" at self.ser_tx.len() for this reason).
-        if self.sent_cuts == self.cuts.len() - 1 {
+        // Done sending entire transaction
+        if self.ser_tx.is_empty() {
             return None;
         }
 
         let mut ret = Vec::with_capacity(apdu_size);
-        ret.push(apdu::ledger::BTCHIP_CLA);
-        ret.push(apdu::ledger::ins::GET_TRUSTED_INPUT);
-        if self.sent_cuts == 0 {
-            ret.push(0x00);
-            ret.push(0x00);
-            ret.push(0x00);  // Will overwrite this with final length
-            let _ = ret.write_u32::<BigEndian>(self.vout);
-        } else {
-            ret.push(0x80);
-            ret.push(0x00);
-            ret.push(0x00);  // Will overwrite this with final length
+        ret.push(ledger::BTCHIP_CLA);
+        ret.push(Instruction::GetTrustedInput.into_u8());
+        ret.push(if self.vout.is_some() { 0x00 } else { 0x80 });
+        ret.push(0x00);
+        ret.push(0x00); // Will overwrite this with final length
+        if let Some(vout) = self.vout.take() {
+            let _ = ret.write_u32::<BigEndian>(vout);
         }
-
-        // Put as many transaction cuts as we can into the message
-        let mut next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
-        while ret.len() + next_cut_len < apdu_size {
-            ret.extend(&self.ser_tx[self.cuts[self.sent_cuts]..self.cuts[self.sent_cuts + 1]]);
-            self.sent_cuts += 1;
-            if self.sent_cuts < self.cuts.len() - 1 {
-                next_cut_len = self.cuts[self.sent_cuts + 1] - self.cuts[self.sent_cuts];
-            } else {
-                break;
-            }
-        }
+        ret.extend(self.ser_tx.pop().unwrap());
 
         // Mark size and return
         assert!(ret.len() < apdu_size);
@@ -558,6 +533,7 @@ impl Command for GetTrustedInput {
     }
 }
 
+/*
 /// UNTRUSTED HASH TRANSACTION INPUT START message
 pub struct UntrustedHashTransactionInputStart {
     continuing: bool,

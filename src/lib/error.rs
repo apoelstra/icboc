@@ -63,6 +63,8 @@ pub enum Error {
         expected: ops::Range<usize>,
         found: usize,
     },
+    #[error("tx {0} not cached in wallet")]
+    TxNotFound(bitcoin::Txid),
     #[error("txo {0} not found in wallet")]
     TxoNotFound(bitcoin::OutPoint),
     #[error("secp256k1")]

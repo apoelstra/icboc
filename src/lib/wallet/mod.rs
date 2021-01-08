@@ -387,6 +387,14 @@ impl Wallet {
         }
     }
 
+    /// Looks up a cached transaction
+    pub fn tx<'a>(&'a self, txid: bitcoin::Txid) -> Result<&'a bitcoin::Transaction, Error> {
+        match self.tx_cache.get(&txid) {
+            Some(txo) => Ok(txo),
+            None => return Err(Error::TxNotFound(txid)),
+        }
+    }
+
     /// Scans a block for wallet-relevant information. Returns two sets, one of
     /// received coins and one of spent coins
     pub fn scan_block(

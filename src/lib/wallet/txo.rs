@@ -17,7 +17,7 @@
 //! Transaction outputs
 //!
 
-use miniscript::bitcoin;
+use miniscript::{bitcoin, DescriptorTrait};
 use std::{cmp, fmt, hash, sync::Arc};
 
 /// A (potentially spent) transaction output tracked by the wallet
@@ -67,12 +67,18 @@ impl hash::Hash for Txo {
 
 impl fmt::Display for Txo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let address = self
+            .address
+            .instantiated_descriptor
+            .address(bitcoin::Network::Bitcoin)
+            .unwrap();
         write!(
             f,
-            "{{ outpoint: \"{}\", value: \"{}\", height: {}, descriptor: \"{}\", index: {}",
+            "{{ outpoint: \"{}\", value: \"{}\", height: {}, address: \"{}\", descriptor: \"{}\", index: {}",
             self.outpoint,
             bitcoin::Amount::from_sat(self.value),
             self.height,
+            address,
             self.address.descriptor.desc,
             self.address.index,
         )?;

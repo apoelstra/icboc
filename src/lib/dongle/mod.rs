@@ -28,6 +28,7 @@ use crate::{constants, Error, KeyCache};
 
 pub mod ledger;
 pub mod message;
+mod tx;
 
 /// Trait representing an abstroct hardware wallet
 pub trait Dongle {
@@ -181,21 +182,40 @@ pub trait Dongle {
         }
     }
 
-    /*
-        /// Query the device for a trusted input
-        fn get_trusted_input(&mut self, tx: &Transaction, vout: u32) -> Result<Vec<u8>, Error> {
-            let command = message::GetTrustedInput::new(tx, vout, constants::apdu::ledger::MAX_APDU_SIZE);
-            let (sw, rev) = self.exchange(command)?;
-            if rev.len() != 56 {
-                return Err(Error::ResponseWrongLength(constants::apdu::ledger::ins::GET_TRUSTED_INPUT, rev.len()));
-            }
-            if sw == constants::apdu::ledger::sw::OK {
-                Ok(rev)
+    /// Query the device for a "trusted input", i.e. a self-signed blob
+    /// attesting to the information related to a txout that we intent
+    /// to spend
+    ///
+    /// We have to send the entire transaction to the device along with
+    /// its vout.
+    fn get_trusted_input(
+        &mut self,
+        tx: &bitcoin::Transaction,
+        vout: u32,
+    ) -> Result<[u8; 56], Error> {
+        let command = message::GetTrustedInput::new(tx, vout);
+        let (sw, rev) = self.exchange(command)?;
+        if sw == constants::apdu::ledger::sw::OK {
+            if rev.len() == 56 {
+                let mut ret = [0; 56];
+                ret.copy_from_slice(&rev[..]);
+                Ok(ret)
             } else {
-                Err(Error::ApduBadStatus(sw))
+                Err(Error::ResponseWrongLength {
+                    apdu: constants::apdu::ledger::Instruction::GetTrustedInput,
+                    expected: 56..57,
+                    found: rev.len(),
+                })
             }
+        } else {
+            Err(Error::ResponseBadStatus {
+                apdu: constants::apdu::ledger::Instruction::GetTrustedInput,
+                status: sw,
+            })
         }
+    }
 
+    /*
         /// Send the device a `UNTRUSTED HASH TRANSACTION INPUT START` command
         fn transaction_input_start(&mut self, spend: &Spend, index: usize, continuing: bool) -> Result<(), Error> {
             let command = message::UntrustedHashTransactionInputStart::new(spend, index, continuing, constants::apdu::ledger::MAX_APDU_SIZE);
@@ -224,17 +244,6 @@ pub trait Dongle {
             let (sw, rev) = self.exchange(command)?;
             if sw == constants::apdu::ledger::sw::OK {
                 Ok(rev)
-            } else {
-                Err(Error::ApduBadStatus(sw))
-            }
-        }
-
-        /// Sends the device a `SET ALTERNATE COIN VERSIONS` command
-        fn set_network(&mut self, network: Network) -> Result<(), Error> {
-            let command = message::SetAlternateCoinVersions::new(network);
-            let (sw, _) = self.exchange(command)?;
-            if sw == constants::apdu::ledger::sw::OK {
-                Ok(())
             } else {
                 Err(Error::ApduBadStatus(sw))
             }
