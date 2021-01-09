@@ -112,7 +112,11 @@ impl super::Command for SignRawTransaction {
             input.witness = wit;
         }
 
-        println!("{}", bitcoin::consensus::encode::serialize_hex(&tx));
+        println!(
+            "Signed tx: {}",
+            bitcoin::consensus::encode::serialize_hex(&tx)
+        );
+        println!("If you intend to broadcast this transaction you should likely run the 'receive' command with it.");
 
         return Ok(());
     }

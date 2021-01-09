@@ -147,10 +147,11 @@ impl Wallet {
                     outpoint: enc_txo.outpoint,
                     value: enc_txo.value,
                     height: enc_txo.height,
-                    spent_data: if let (Some(txid), Some(height)) =
-                        (enc_txo.spent, enc_txo.spent_height)
-                    {
-                        Some(SpentData { txid, height })
+                    spent_data: if let Some(txid) = enc_txo.spent {
+                        Some(SpentData {
+                            txid,
+                            height: enc_txo.spent_height,
+                        })
                     } else {
                         None
                     },
@@ -199,7 +200,7 @@ impl Wallet {
                     value: txo.value,
                     height: txo.height,
                     spent: txo.spent_data.as_ref().map(|data| data.txid),
-                    spent_height: txo.spent_data.as_ref().map(|data| data.height),
+                    spent_height: txo.spent_data.as_ref().map(|data| data.height).unwrap_or(0),
                 })
                 .collect(),
             key_cache: self.key_cache.clone(),
@@ -237,7 +238,10 @@ impl Wallet {
 
     /// Iterator over all addresses generated in the wallet
     pub fn addresses<'a>(&'a self) -> impl Iterator<Item = Arc<Address>> + 'a {
-        self.spk_address.values().cloned()
+        self.spk_address
+            .values()
+            .cloned()
+            .filter(|addr| addr.user_data.lock().unwrap().is_some())
     }
 
     /// Iterator over all TXOs tracked by the wallet
@@ -398,49 +402,74 @@ impl Wallet {
         }
     }
 
+    /// Scans a transaction for wallet-relevant information. Returns two sets, one of
+    /// received coins and one of spent coins
+    pub fn scan_tx(
+        &mut self,
+        tx: &bitcoin::Transaction,
+        height: u64,
+    ) -> (HashSet<bitcoin::OutPoint>, HashSet<bitcoin::OutPoint>) {
+        let mut received = HashSet::new();
+        let mut spent = HashSet::new();
+
+        for (vout, output) in tx.output.iter().enumerate() {
+            if let Some(addr) = self.spk_address.get(&output.script_pubkey) {
+                let outpoint = bitcoin::OutPoint::new(tx.txid(), vout as u32);
+                match self.txos.entry(outpoint) {
+                    Entry::Vacant(v) => {
+                        v.insert(Txo {
+                            address: addr.clone(),
+                            outpoint: outpoint,
+                            value: output.value,
+                            height: height,
+                            spent_data: None,
+                        });
+                    }
+                    Entry::Occupied(mut o) => o.get_mut().height = height,
+                }
+                self.tx_cache.insert(tx.txid(), tx.clone());
+                received.insert(outpoint);
+            }
+        }
+
+        for input in &tx.input {
+            if let Some(txo) = self.txos.get_mut(&input.previous_output) {
+                if let Some(data) = txo.spent_data.take() {
+                    println!(
+                        "Warning: {} is double-spent by {} (original transaction {})",
+                        input.previous_output,
+                        tx.txid(),
+                        data.txid,
+                    );
+                }
+                txo.spent_data = Some(SpentData {
+                    txid: tx.txid(),
+                    height: height,
+                });
+                spent.insert(input.previous_output);
+            }
+        }
+
+        (received, spent)
+    }
+
     /// Scans a block for wallet-relevant information. Returns two sets, one of
     /// received coins and one of spent coins
     pub fn scan_block(
         &mut self,
         block: &bitcoin::Block,
         height: u64,
-    ) -> Result<(HashSet<bitcoin::OutPoint>, HashSet<bitcoin::OutPoint>), Error> {
+    ) -> (HashSet<bitcoin::OutPoint>, HashSet<bitcoin::OutPoint>) {
         let mut received = HashSet::new();
         let mut spent = HashSet::new();
 
         for tx in &block.txdata {
-            for (vout, output) in tx.output.iter().enumerate() {
-                if let Some(addr) = self.spk_address.get(&output.script_pubkey) {
-                    let outpoint = bitcoin::OutPoint::new(tx.txid(), vout as u32);
-                    match self.txos.entry(outpoint) {
-                        Entry::Vacant(v) => {
-                            v.insert(Txo {
-                                address: addr.clone(),
-                                outpoint: outpoint,
-                                value: output.value,
-                                height: height,
-                                spent_data: None,
-                            });
-                        }
-                        Entry::Occupied(mut o) => o.get_mut().height = height,
-                    }
-                    self.tx_cache.insert(tx.txid(), tx.clone());
-                    received.insert(outpoint);
-                }
-            }
-
-            for input in &tx.input {
-                if let Some(txo) = self.txos.get_mut(&input.previous_output) {
-                    txo.spent_data = Some(SpentData {
-                        txid: tx.txid(),
-                        height: height,
-                    });
-                    spent.insert(input.previous_output);
-                }
-            }
+            let (rec, spe) = self.scan_tx(tx, height);
+            received.extend(rec);
+            spent.extend(spe);
         }
 
-        Ok((received, spent))
+        (received, spent)
     }
 }
 

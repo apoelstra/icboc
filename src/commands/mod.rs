@@ -23,6 +23,7 @@ mod importicboc;
 mod info;
 mod init;
 mod listunspent;
+mod receive;
 mod rescan;
 mod signrawtransaction;
 
@@ -117,8 +118,9 @@ register_commands! {
     listunspent, ListUnspent, "";
     importdescriptor, ImportDescriptor, "{ \"desc\": string, \"range_low\": int, \"range_high\": int }";
     importicboc, ImportIcboc, "{ \"file\": string }";
+    receive, Receive, "{ \"tx\": hexstring }";
     rescan, Rescan, "{ \"start_from\": int }";
-    signrawtransaction, SignRawTransaction, "{ \"tx\": hexstring }";
+    signrawtransaction, SignRawTransaction, "{ \"tx\": hexstring, \"change_index\": int }";
 }
 
 /// Special message which has a very recognizeable pattern when

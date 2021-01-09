@@ -72,14 +72,12 @@ impl super::Command for Rescan {
                 );
             }
 
-            let (received, spent) = wallet
-                .scan_block(&block, height)
-                .with_context(|| format!("updating wallet from block {}", height))?;
-            for txo in received {
-                println!("received {}", wallet.txo(txo).unwrap());
-            }
+            let (received, spent) = wallet.scan_block(&block, height);
             for txo in spent {
                 println!("spent {}", txo);
+            }
+            for txo in received {
+                println!("received {}", wallet.txo(txo).unwrap());
             }
 
             height += 1;

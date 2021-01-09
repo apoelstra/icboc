@@ -156,8 +156,9 @@ pub struct EncTxo {
     pub spent: Option<bitcoin::Txid>,
     /// Blockheight at which the UTXO was created
     pub height: u64,
-    /// Blockheight at which the UTXO was spenta
-    pub spent_height: Option<u64>,
+    /// Blockheight at which the UTXO was spent (ignored
+    /// if it is unspent)
+    pub spent_height: u64,
 }
 
 impl Serialize for EncTxo {
@@ -168,7 +169,7 @@ impl Serialize for EncTxo {
         self.value.write_to(&mut w)?;
         self.spent.unwrap_or(Default::default()).write_to(&mut w)?;
         self.height.write_to(&mut w)?;
-        self.spent_height.unwrap_or(Default::default()).write_to(w)
+        self.spent_height.write_to(w)
     }
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
@@ -186,14 +187,7 @@ impl Serialize for EncTxo {
                 }
             },
             height: Serialize::read_from(&mut r)?,
-            spent_height: {
-                let height = Serialize::read_from(&mut r)?;
-                if height == 0 {
-                    None
-                } else {
-                    Some(height)
-                }
-            },
+            spent_height: Serialize::read_from(&mut r)?,
         })
     }
 }
