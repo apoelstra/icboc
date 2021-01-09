@@ -151,7 +151,12 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
     fn lookup_sig(&self, pk: &icboc::CachedKey) -> Option<miniscript::BitcoinSig> {
         let mut dongle = self.dongle.borrow_mut();
         dongle
-            .transaction_input_start(self.tx, self.input_idx, &self.trusted_inputs, true)
+            .transaction_input_start(
+                self.tx,
+                self.input_idx,
+                &self.trusted_inputs,
+                self.input_idx == 0,
+            )
             .map_err(|e| {
                 println!("starting transaction input: {} {}", self.input_idx, e);
                 e
