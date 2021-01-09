@@ -17,7 +17,6 @@
 //! Gets information about data stored by the wallet
 //!
 
-use crate::rpc;
 use anyhow::Context;
 use icboc::Dongle;
 use serde::Deserialize;
@@ -45,7 +44,6 @@ impl super::Command for GetNewAddress {
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        _bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;

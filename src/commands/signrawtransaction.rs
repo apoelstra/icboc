@@ -19,7 +19,6 @@
 //! change.
 //!
 
-use crate::rpc;
 use anyhow::Context;
 use icboc::{self, Dongle};
 use miniscript::bitcoin::{self, consensus, hashes::hex::FromHex};
@@ -48,7 +47,6 @@ impl super::Command for SignRawTransaction {
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        _bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, _) = super::get_wallet_key_and_nonce(dongle)?;

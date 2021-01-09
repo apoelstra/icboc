@@ -14,7 +14,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.0"
-jsonrpc = "0.12"
+jsonrpc = { version ="0.12", optional = true }
 hidapi = "1.2"
 home = "0.5"
 miniscript = { version = "4.0", path = "../../rust-bitcoin/miniscript/2021--rust-bitcoin-0.26", features = ["use-serde"] }

@@ -25,15 +25,11 @@ use anyhow::Context;
 use icboc::Dongle;
 
 mod commands;
+#[cfg(feature = "jsonrpc")]
 mod rpc;
 
 /// Entry point
 fn main() -> anyhow::Result<()> {
-    // Talk to the bitcoind
-    let bitcoind = rpc::Bitcoind::connect("~/.bitcoin/.cookie")?;
-    let n = bitcoind.getblockcount()?;
-    println!("Connected to bitcoind. Block count: {}", n);
-
     // Contact device and run GET FIRMWARE to sanity check it
     let hid_api = icboc::hid::Api::new().context("getting HID API context")?;
     let mut dongle = icboc::ledger::NanoS::get(&hid_api).context("finding dongle")?;
@@ -50,7 +46,7 @@ fn main() -> anyhow::Result<()> {
     println!("    Master fingerprint: {}", master_xpub.fingerprint());
 
     // Do the user's bidding
-    commands::execute_from_args(&bitcoind, &mut dongle)?;
+    commands::execute_from_args(&mut dongle)?;
 
     /*
     // Decide what to do

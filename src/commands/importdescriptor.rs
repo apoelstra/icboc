@@ -17,7 +17,6 @@
 //! Imports a (ranged) descriptor into the wallet
 //!
 
-use crate::rpc;
 use anyhow::Context;
 use icboc::Dongle;
 use miniscript::{Descriptor, DescriptorPublicKey};
@@ -43,7 +42,6 @@ impl super::Command for ImportDescriptor {
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        _bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;

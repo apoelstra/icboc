@@ -17,6 +17,10 @@
 //! Scans the blockchain for new transactions
 //!
 
+#![cfg_attr(not(feature = "jsonrpc"), allow(dead_code))]
+#![cfg_attr(not(feature = "jsonrpc"), allow(unused_imports))]
+
+#[cfg(feature = "jsonrpc")]
 use crate::rpc;
 use anyhow::Context;
 use icboc::Dongle;
@@ -32,15 +36,30 @@ pub struct Options {
     start_from: Option<u64>,
 }
 
+#[cfg(not(feature = "jsonrpc"))]
+impl super::Command for Rescan {
+    type Options = Options;
+
+    fn execute<D: Dongle, P: AsRef<Path>>(_: Options, _: P, _: &mut D) -> anyhow::Result<()> {
+        Err(anyhow::Error::msg(
+            "you must compile this crate with the jsonrpc feature to get the 'rescan' command",
+        ))
+    }
+}
+
+#[cfg(feature = "jsonrpc")]
 impl super::Command for Rescan {
     type Options = Options;
 
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
+        let bitcoind = rpc::Bitcoind::connect("~/.bitcoin/.cookie")?;
+        let n = bitcoind.getblockcount()?;
+        println!("Connected to bitcoind. Block count: {}", n);
+
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
         let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 

@@ -17,7 +17,6 @@
 //! Initializes a new wallet
 //!
 
-use crate::rpc;
 use anyhow::Context;
 use icboc::{Dongle, Wallet};
 use serde::Deserialize;
@@ -39,7 +38,6 @@ impl super::Command for Init {
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        _bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let wallet_name = wallet_path.as_ref().to_string_lossy().into_owned();

@@ -17,7 +17,6 @@
 //! Gets information about data stored by the wallet
 //!
 
-use crate::rpc;
 use icboc::Dongle;
 use miniscript::bitcoin;
 use serde::Deserialize;
@@ -41,7 +40,6 @@ impl super::Command for Info {
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        _bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
         let (key, _) = super::get_wallet_key_and_nonce(dongle)?;

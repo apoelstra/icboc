@@ -37,15 +37,12 @@ use serde::de::DeserializeOwned;
 use serde_json;
 use std::{borrow::Cow, env, fs, path::Path};
 
-use crate::rpc;
-
 pub trait Command {
     type Options: DeserializeOwned;
 
     fn execute<D: Dongle, P: AsRef<Path>>(
         options: Self::Options,
         wallet_path: P,
-        bitcoind: &rpc::Bitcoind,
         dongle: &mut D,
     ) -> anyhow::Result<()>;
 }
@@ -64,7 +61,6 @@ macro_rules! register_commands {
 
         /// Parse command-line arguments and execute them
         pub fn execute_from_args<D: Dongle>(
-            bitcoind: &rpc::Bitcoind,
             dongle: &mut D,
         ) -> anyhow::Result<()> {
             let mut args = env::args_os();
@@ -102,7 +98,7 @@ macro_rules! register_commands {
                             "deserializing options for {}",
                              stringify!($cmd_name),
                         ))?;
-                    $type_name::execute(opts, path, bitcoind, dongle)?;
+                    $type_name::execute(opts, path, dongle)?;
                 }),*
                 _ => usage(&name)?,
             }
