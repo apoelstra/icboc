@@ -27,13 +27,16 @@ pub struct ListUnspent;
 
 /// Lists all UTXOs
 #[derive(Deserialize)]
-pub struct Options {}
+pub struct Options {
+    #[serde(default)]
+    show_all: bool,
+}
 
 impl super::Command for ListUnspent {
     type Options = Options;
 
     fn execute<D: Dongle, P: AsRef<Path>>(
-        _options: Self::Options,
+        options: Self::Options,
         wallet_path: P,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
@@ -50,7 +53,9 @@ impl super::Command for ListUnspent {
             .sum::<u64>();
 
         for txo in all_txos {
-            println!("{}", txo);
+            if options.show_all || txo.spent_data.is_none() {
+                println!("{}", txo);
+            }
         }
         println!("Total balance: {}", bitcoin::Amount::from_sat(full_balance));
         println!("");
