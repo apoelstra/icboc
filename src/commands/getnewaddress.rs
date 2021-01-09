@@ -21,7 +21,7 @@ use anyhow::Context;
 use icboc::Dongle;
 use serde::Deserialize;
 use std::path::Path;
-use time::OffsetDateTime;
+use time;
 
 /// Gets/updates an address
 pub struct GetNewAddress;
@@ -49,7 +49,7 @@ impl super::Command for GetNewAddress {
         let (key, nonce) = super::get_wallet_key_and_nonce(dongle)?;
         let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
-        let timestr = OffsetDateTime::now_utc().format("%Y-%m-%d %H:%M:%S%z");
+        let timestr = time::strftime("%F %T%z", &time::now()).unwrap();
         assert_eq!(timestr.bytes().len(), 24);
 
         if options.descriptor >= wallet.n_descriptors() {
