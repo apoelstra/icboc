@@ -251,9 +251,15 @@ pub trait Dongle {
         &mut self,
         tx: &bitcoin::Transaction,
         index: usize,
-        trusted_input: &TrustedInput,
+        trusted_inputs: &[TrustedInput],
+        first_input: bool,
     ) -> Result<(), Error> {
-        let command = message::UntrustedHashTransactionInputStart::new(tx, index, trusted_input);
+        let command = message::UntrustedHashTransactionInputStart::new(
+            tx,
+            index,
+            trusted_inputs,
+            first_input,
+        );
         let (sw, _) = self.exchange(command)?;
         if sw == ledger_const::sw::OK {
             Ok(())

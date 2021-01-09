@@ -84,12 +84,30 @@ impl super::Command for SignRawTransaction {
 
         // Sign
         let unsigned_tx = tx.clone();
+        let mut trusted_inputs = Vec::with_capacity(tx.input.len());
+        for input in &tx.input {
+            let prev_tx = wallet
+                .tx(input.previous_output.txid)
+                .with_context(|| format!("looking prevtx {} in wallet", input.previous_output))?;
+            trusted_inputs.push(
+                dongle
+                    .get_trusted_input(prev_tx, input.previous_output.vout)
+                    .with_context(|| {
+                        format!(
+                            "getting trusted input for {} from dongle",
+                            input.previous_output
+                        )
+                    })?,
+            );
+        }
+
         let mut satisfier = Satisfier {
             tx: &unsigned_tx,
             input_idx: 0,
             prev_tx: &unsigned_tx,
             dongle: RefCell::new(dongle),
             change_address: change,
+            trusted_inputs: trusted_inputs,
         };
         for (n, input) in tx.input.iter_mut().enumerate() {
             satisfier.input_idx = n;
@@ -126,26 +144,25 @@ struct Satisfier<'tx, 'd, 'c, D> {
     input_idx: usize,
     dongle: RefCell<&'d mut D>,
     change_address: Option<&'c icboc::Address>,
+    trusted_inputs: Vec<icboc::TrustedInput>,
 }
 
 impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'tx, 'd, 'c, D> {
     fn lookup_sig(&self, pk: &icboc::CachedKey) -> Option<miniscript::BitcoinSig> {
         let mut dongle = self.dongle.borrow_mut();
-        let trusted_input = dongle
-            .get_trusted_input(
-                self.prev_tx,
-                self.tx.input[self.input_idx].previous_output.vout,
-            )
+        dongle
+            .transaction_input_start(self.tx, self.input_idx, &self.trusted_inputs, true)
             .map_err(|e| {
-                println!("getting trusted input: {}", e);
+                println!("starting transaction input: {} {}", self.input_idx, e);
                 e
             })
             .ok()?;
         dongle
-            .transaction_input_start(self.tx, self.input_idx, &trusted_input)
-            .ok()?;
-        dongle
             .transaction_input_finalize(self.tx, self.change_address)
+            .map_err(|e| {
+                println!("finalizing transaction input: {} {}", self.input_idx, e);
+                e
+            })
             .ok()?;
         dongle
             .transaction_sign(
@@ -153,6 +170,10 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
                 bitcoin::SigHashType::All,
                 self.tx.lock_time,
             )
+            .map_err(|e| {
+                println!("signing transaction input: {} {}", self.input_idx, e);
+                e
+            })
             .ok()
             .map(|sig| (sig, bitcoin::SigHashType::All))
     }

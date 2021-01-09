@@ -538,6 +538,7 @@ impl Command for GetTrustedInput {
 pub struct UntrustedHashTransactionInputStart {
     ser_inputs: Vec<Vec<u8>>,
     sent_first: bool,
+    first_input: bool,
     sw: u16,
 }
 
@@ -549,14 +550,16 @@ impl UntrustedHashTransactionInputStart {
     pub fn new(
         tx: &bitcoin::Transaction,
         index: usize,
-        trusted_input: &super::TrustedInput,
+        trusted_inputs: &[super::TrustedInput],
+        first_input: bool,
     ) -> UntrustedHashTransactionInputStart {
         let mut ser_inputs =
-            super::tx::encode_input(tx, index, trusted_input, ledger::MAX_APDU_SIZE);
+            super::tx::encode_input(tx, index, trusted_inputs, ledger::MAX_APDU_SIZE);
         ser_inputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputStart {
             ser_inputs: ser_inputs,
             sent_first: false,
+            first_input: first_input,
             sw: 0,
         }
     }
@@ -573,7 +576,7 @@ impl Command for UntrustedHashTransactionInputStart {
         ret.push(ledger::BTCHIP_CLA);
         ret.push(Instruction::UntrustedHashTransactionInputStart.into_u8());
         ret.push(if self.sent_first { 0x80 } else { 0x00 });
-        ret.push(0x00); // should be 0x80 if we are continuing, but
+        ret.push(if self.first_input { 0x00 } else { 0x80 });
         ret.push(0x00); // Will overwrite this with final length
         ret.extend(self.ser_inputs.pop().unwrap());
 

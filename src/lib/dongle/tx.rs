@@ -106,7 +106,7 @@ pub fn encode_tx(tx: &bitcoin::Transaction, piece_len: usize) -> Vec<Vec<u8>> {
 pub fn encode_input(
     tx: &bitcoin::Transaction,
     index: usize,
-    trusted_input: &TrustedInput,
+    trusted_inputs: &[TrustedInput],
     piece_len: usize,
 ) -> Vec<Vec<u8>> {
     let mut ret = vec![];
@@ -116,7 +116,7 @@ pub fn encode_input(
     for (n, input) in tx.input.iter().enumerate() {
         let dummy = bitcoin::Script::new();
         let spk = if n == index {
-            &trusted_input.script_pubkey
+            &trusted_inputs[n].script_pubkey
         } else {
             &dummy
         };
@@ -125,7 +125,7 @@ pub fn encode_input(
             // TODO check if we have a segwit spk and use its value instead
             &(
                 1u8,
-                trusted_input.blob.to_vec(), // Encodable not implemented on &[u8]
+                trusted_inputs[n].blob.to_vec(), // Encodable not implemented on &[u8]
                 spk,
             ),
             cur,
