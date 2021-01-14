@@ -83,11 +83,10 @@ impl super::Command for ImportIcboc {
 
         fh.read_exact(&mut magic[0..4])
             .context("reading account number bytes")?;
-        if &magic[0..4] != &[0; 4] {
-            return Err(anyhow::Error::msg(
-                "account number was not 0, is this a real icboc wallet?",
-            ));
-        }
+        let account_no = ((magic[0] as u32) << 24)
+            + ((magic[1] as u32) << 16)
+            + ((magic[2] as u32) << 8)
+            + magic[3] as u32;
 
         println!(
             "Found ICBOC 1D wallet with {} entries. Fetching that many keys from the Ledger.",
@@ -97,9 +96,11 @@ impl super::Command for ImportIcboc {
         // 1. Import descriptor
         let master_xpub = dongle.get_master_xpub().context("getting master xpub")?;
         let desc_idx = wallet.n_descriptors();
-        let desc =
-            miniscript::Descriptor::from_str(&format!("pkh({}/44h/0h/0h/2h/*h)", master_xpub))
-                .expect("well-formed descriptor");
+        let desc = miniscript::Descriptor::from_str(&format!(
+            "pkh({}/44h/{}h/0h/2h/*h)",
+            account_no, master_xpub
+        ))
+        .expect("well-formed descriptor");
 
         if n_entries >= (1 << 31) {
             return Err(anyhow::Error::msg(format!(
