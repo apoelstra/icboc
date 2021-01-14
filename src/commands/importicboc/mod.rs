@@ -124,7 +124,7 @@ impl super::Command for ImportIcboc {
                 .get_public_key(
                     &[
                         bip32::ChildNumber::Hardened { index: 44 },
-                        bip32::ChildNumber::Hardened { index: 0 },
+                        bip32::ChildNumber::Hardened { index: account_no },
                         bip32::ChildNumber::Hardened { index: 0 },
                         bip32::ChildNumber::Hardened { index: 3 },
                         bip32::ChildNumber::Hardened { index: i as u32 },
