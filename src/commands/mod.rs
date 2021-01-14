@@ -160,7 +160,7 @@ fn open_wallet<D: Dongle, P: AsRef<Path>>(
     let wallet = Wallet::from_reader(dongle, fh, wallet_key)
         .with_context(|| format!("reading wallet {}", wallet_name))?;
     println!(
-        "Opened wallet at {} with {} descriptors, {} txos, and {} used addresses.",
+        "Opened wallet at {} with {} descriptors, {} txos, and {} generated addresses.",
         wallet_path.as_ref().to_string_lossy(),
         wallet.n_descriptors(),
         wallet.n_txos(),

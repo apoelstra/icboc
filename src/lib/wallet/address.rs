@@ -77,8 +77,8 @@ impl fmt::Display for Address {
         let address = bitcoin::Address::from_script(&spk, bitcoin::Network::Bitcoin).unwrap();
         write!(
             f,
-            "{{ address: \"{}\", script_pubkey: \"{:x}\"",
-            address, spk,
+            "{{ address: \"{}\", script_pubkey: \"{:x}\", descriptor: \"{}\", index: {}",
+            address, spk, self.descriptor.desc, self.index
         )?;
         if let Some(ref data) = *self.user_data.lock().unwrap() {
             write!(
