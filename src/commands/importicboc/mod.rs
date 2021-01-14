@@ -98,7 +98,7 @@ impl super::Command for ImportIcboc {
         let desc_idx = wallet.n_descriptors();
         let desc = miniscript::Descriptor::from_str(&format!(
             "pkh({}/44h/{}h/0h/2h/*h)",
-            account_no, master_xpub
+            master_xpub, account_no
         ))
         .expect("well-formed descriptor");
 
