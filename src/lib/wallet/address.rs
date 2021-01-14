@@ -77,13 +77,13 @@ impl fmt::Display for Address {
         let address = bitcoin::Address::from_script(&spk, bitcoin::Network::Bitcoin).unwrap();
         write!(
             f,
-            "{{ address: \"{}\", script_pubkey: \"{:x}\", descriptor: \"{}\", index: {}",
+            "{{ \"address\": \"{}\", \"script_pubkey\": \"{:x}\", \"descriptor\": \"{}\", \"index\": {}",
             address, spk, self.descriptor.desc, self.index
         )?;
         if let Some(ref data) = *self.user_data.lock().unwrap() {
             write!(
                 f,
-                " notes: \"{}\", address_created_at: \"{}\"",
+                ", \"notes\": \"{}\", \"address_created_at\": \"{}\"",
                 data.notes, data.time,
             )?;
         }
