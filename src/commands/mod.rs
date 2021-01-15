@@ -115,7 +115,7 @@ register_commands! {
     importdescriptor, ImportDescriptor, "{ \"desc\": string, \"range_low\": int, \"range_high\": int }";
     importicboc, ImportIcboc, "{ \"file\": string }";
     receive, Receive, "{ \"tx\": hexstring }";
-    rescan, Rescan, "{ \"start_from\": int }";
+    rescan, Rescan, "{ \"start_from\": int, \"timeout_ms\": int }";
     signrawtransaction, SignRawTransaction, "{ \"tx\": hexstring, \"change_index\": int }";
 }
 

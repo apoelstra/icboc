@@ -14,7 +14,7 @@ pub struct Bitcoind {
 
 impl Bitcoind {
     /// Connect to a bitcoind over JSONRPC
-    pub fn connect(rpccookie: &str) -> anyhow::Result<Bitcoind> {
+    pub fn connect(rpccookie: &str, timeout_ms: u64) -> anyhow::Result<Bitcoind> {
         let cookie_file = if &rpccookie.as_bytes()[0..2] == b"~/" {
             Cow::Owned(
                 home::home_dir()
@@ -27,7 +27,7 @@ impl Bitcoind {
         let userpass = fs::read_to_string(&*cookie_file)
             .with_context(|| format!("opening file {}", cookie_file.to_string_lossy()))?;
         let transport = jsonrpc::simple_http::Builder::new()
-            .timeout(Duration::from_millis(1000))
+            .timeout(Duration::from_millis(timeout_ms))
             .cookie_auth(&userpass)
             .build();
         Ok(Bitcoind {

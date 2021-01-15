@@ -30,10 +30,16 @@ use std::path::Path;
 /// Scans the blockchain for new transactions
 pub struct Rescan;
 
+fn default_timeout() -> u64 {
+    1000
+}
+
 /// Scans the blockchain for new transactions
 #[derive(Deserialize)]
 pub struct Options {
     start_from: Option<u64>,
+    #[serde(default = "default_timeout")]
+    timeout_ms: u64,
 }
 
 #[cfg(not(feature = "jsonrpc"))]
@@ -56,7 +62,7 @@ impl super::Command for Rescan {
         wallet_path: P,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
-        let bitcoind = rpc::Bitcoind::connect("~/.bitcoin/.cookie")?;
+        let bitcoind = rpc::Bitcoind::connect("~/.bitcoin/.cookie", options.timeout_ms)?;
         let n = bitcoind.getblockcount()?;
         println!("Connected to bitcoind. Block count: {}", n);
 
