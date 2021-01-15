@@ -28,6 +28,7 @@ pub struct ImportDescriptor;
 
 /// Gets information
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     desc: Descriptor<DescriptorPublicKey>,
     #[serde(default)]

@@ -42,6 +42,7 @@ pub struct ImportIcboc;
 
 /// Gets information
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     /// Filename of the ICBOC 1D wallet to import
     file: PathBuf,

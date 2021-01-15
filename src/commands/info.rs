@@ -27,6 +27,7 @@ pub struct Info;
 
 /// Gets information
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     #[serde(default)]
     descriptors: Vec<usize>,

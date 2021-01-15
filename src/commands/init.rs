@@ -27,6 +27,7 @@ pub struct Init;
 
 /// Initialize a new wallet
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     #[serde(default)]
     force: bool,

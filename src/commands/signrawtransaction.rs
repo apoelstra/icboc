@@ -32,6 +32,7 @@ pub struct SignRawTransaction;
 
 /// Signs a raw transaction
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     /// Hex-encoded transaction to sign
     tx: String,

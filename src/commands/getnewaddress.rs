@@ -28,6 +28,7 @@ pub struct GetNewAddress;
 
 /// Gets information
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     /// Which descriptor to generate the address from
     descriptor: usize,

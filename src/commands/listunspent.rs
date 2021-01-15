@@ -27,6 +27,7 @@ pub struct ListUnspent;
 
 /// Lists all UTXOs
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     #[serde(default)]
     show_all: bool,

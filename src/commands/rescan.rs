@@ -36,6 +36,7 @@ fn default_timeout() -> u64 {
 
 /// Scans the blockchain for new transactions
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     start_from: Option<u64>,
     #[serde(default = "default_timeout")]

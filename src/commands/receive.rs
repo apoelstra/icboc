@@ -28,6 +28,7 @@ pub struct Receive;
 
 /// Accept a single transaction
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     /// Hex-encoded transaction to receive
     tx: String,
