@@ -33,7 +33,7 @@ mod error;
 mod util;
 mod wallet;
 
-use miniscript::bitcoin::{self, util::bip32};
+use miniscript::bitcoin::{secp256k1, util::bip32};
 use miniscript::DescriptorPublicKey;
 use std::collections::HashMap;
 
@@ -55,7 +55,7 @@ pub mod hid {
 /// Opaque cache of keys we've queried a dongle for
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyCache {
-    map: HashMap<bip32::ExtendedPubKey, HashMap<bip32::DerivationPath, bitcoin::PublicKey>>,
+    map: HashMap<bip32::ExtendedPubKey, HashMap<bip32::DerivationPath, secp256k1::PublicKey>>,
 }
 
 impl KeyCache {
@@ -65,9 +65,12 @@ impl KeyCache {
     }
 
     ///
-    fn lookup_descriptor_pubkey(&self, d: &DescriptorPublicKey) -> Option<bitcoin::PublicKey> {
+    fn lookup_descriptor_pubkey(&self, d: &DescriptorPublicKey) -> Option<secp256k1::PublicKey> {
         match *d {
-            DescriptorPublicKey::SinglePub(ref single) => Some(single.key),
+            DescriptorPublicKey::SinglePub(ref single) => match single.key {
+                miniscript::descriptor::SinglePubKey::FullKey(key) => Some(key.inner),
+                miniscript::descriptor::SinglePubKey::XOnly(_) => todo!("No taproot support yet"),
+            },
             DescriptorPublicKey::XPub(ref xpub) => self.lookup(xpub.xkey, &xpub.derivation_path),
         }
     }
@@ -77,7 +80,7 @@ impl KeyCache {
         &self,
         xpub: bip32::ExtendedPubKey,
         path: &bip32::DerivationPath,
-    ) -> Option<bitcoin::PublicKey> {
+    ) -> Option<secp256k1::PublicKey> {
         self.map
             .get(&xpub)
             .and_then(|map| map.get(path))
@@ -89,7 +92,7 @@ impl KeyCache {
         &mut self,
         xpub: bip32::ExtendedPubKey,
         path: bip32::DerivationPath,
-        key: bitcoin::PublicKey,
+        key: secp256k1::PublicKey,
     ) {
         self.map
             .entry(xpub)

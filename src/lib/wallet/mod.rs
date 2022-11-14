@@ -21,7 +21,7 @@ mod address;
 mod encode;
 mod txo;
 
-use miniscript::bitcoin::{self, hashes::hash160};
+use miniscript::bitcoin::{self, hashes::hash160, secp256k1};
 use miniscript::{self, DescriptorTrait, TranslatePk2};
 
 use std::cell::RefCell;
@@ -259,7 +259,7 @@ impl Wallet {
         dongle: &mut D,
         key_cache: &mut KeyCache,
         key: &miniscript::DescriptorPublicKey,
-    ) -> Result<bitcoin::PublicKey, Error> {
+    ) -> Result<secp256k1::PublicKey, Error> {
         dongle.get_wallet_public_key(key, key_cache)
     }
 
@@ -479,7 +479,7 @@ pub struct CachedKey {
     /// Instantiated descriptor
     pub desc_key: miniscript::DescriptorPublicKey,
     /// Cached copy of the resulting bitcoin PublicKey
-    pub key: bitcoin::PublicKey,
+    pub key: secp256k1::PublicKey,
 }
 
 impl fmt::Display for CachedKey {
@@ -497,7 +497,7 @@ impl miniscript::MiniscriptKey for CachedKey {
 
 impl miniscript::ToPublicKey for CachedKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        self.key
+        bitcoin::PublicKey::new(self.key)
     }
 
     fn hash_to_hash160(hash: &<Self as miniscript::MiniscriptKey>::Hash) -> hash160::Hash {

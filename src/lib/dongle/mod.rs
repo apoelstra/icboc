@@ -17,7 +17,7 @@
 //! Abstract API for communicating with the device
 //!
 
-use miniscript::bitcoin::secp256k1;
+use miniscript::bitcoin::secp256k1::{self, ecdsa};
 use miniscript::bitcoin::util::bip32;
 use miniscript::{self, bitcoin};
 
@@ -110,9 +110,12 @@ pub trait Dongle {
         &mut self,
         key: &miniscript::DescriptorPublicKey,
         key_cache: &mut KeyCache,
-    ) -> Result<bitcoin::PublicKey, Error> {
+    ) -> Result<secp256k1::PublicKey, Error> {
         match *key {
-            miniscript::DescriptorPublicKey::SinglePub(ref single) => Ok(single.key),
+            miniscript::DescriptorPublicKey::SinglePub(ref single) => match single.key {
+                miniscript::descriptor::SinglePubKey::FullKey(key) => Ok(key.inner),
+                miniscript::descriptor::SinglePubKey::XOnly(_) => Err(Error::NoTaprootSupport),
+            },
             miniscript::DescriptorPublicKey::XPub(ref xkey) => {
                 if let Some(entry) = key_cache.lookup(xkey.xkey, &xkey.derivation_path) {
                     return Ok(entry);
@@ -177,7 +180,7 @@ pub trait Dongle {
         &mut self,
         message: &[u8],
         bip32_path: &P,
-    ) -> Result<secp256k1::Signature, Error> {
+    ) -> Result<ecdsa::Signature, Error> {
         let command = message::SignMessagePrepare::new(bip32_path, message);
         let (sw, rev) = self.exchange(command)?;
         // This should never happen unless we exceed Ledger limits
@@ -293,14 +296,14 @@ pub trait Dongle {
     fn transaction_sign<P: AsRef<[bip32::ChildNumber]>>(
         &mut self,
         bip32_path: &P,
-        sighash: bitcoin::SigHashType,
+        sighash: bitcoin::EcdsaSighashType,
         tx_locktime: u32,
-    ) -> Result<secp256k1::Signature, Error> {
+    ) -> Result<ecdsa::Signature, Error> {
         let command = message::UntrustedHashSign::new(bip32_path, sighash, tx_locktime);
         let (sw, mut rev) = self.exchange(command)?;
         if sw == ledger_const::sw::OK {
             rev[0] = 0x30;
-            secp256k1::Signature::from_der_lax(&rev).map_err(Error::from)
+            ecdsa::Signature::from_der_lax(&rev).map_err(Error::from)
         } else {
             Err(Error::ResponseBadStatus {
                 apdu: ledger_const::Instruction::UntrustedHashSign,

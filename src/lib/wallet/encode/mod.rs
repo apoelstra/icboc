@@ -212,7 +212,7 @@ impl Serialize for KeyCache {
             for (path, key) in map.iter() {
                 xpub.write_to(&mut w)?;
                 path.write_to(&mut w)?;
-                key.write_to(&mut w)?;
+                w.write_all(&key.serialize())?;
             }
         }
         Ok(())

@@ -232,7 +232,7 @@ impl<'a> Command for GetWalletPublicKey<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletPublicKey {
     /// The EC public key
-    pub public_key: bitcoin::PublicKey,
+    pub public_key: bitcoin::secp256k1::PublicKey,
     /// The base58-encoded address corresponding to the public key
     pub b58_address: String,
     /// The BIP32 chain code associated to this key
@@ -245,10 +245,12 @@ impl Response for WalletPublicKey {
         if 2 + pk_len > data.len() {
             return Err(Error::UnexpectedEof);
         }
-        let mut pk = bitcoin::PublicKey::from_slice(&data[1..1 + pk_len])?;
         // The ledger will return an uncompressed public key, but actually
-        // derives addresses using compressed keys
-        pk.compressed = true;
+        // derives addresses using compressed keys. This is fine; we just
+        // parse as a secp pubkey, and rust-bitcoin will do the right thing
+        // (since it understands the bip32 spec as just using "keys" and
+        // always encoding them compressedly).
+        let pk = bitcoin::secp256k1::PublicKey::from_slice(&data[1..1 + pk_len])?;
 
         let addr_len = data[1 + pk_len] as usize;
         let expected_len = 2 + pk_len + addr_len + 32;
@@ -690,7 +692,7 @@ pub struct UntrustedHashSign<'a> {
     reply: Vec<u8>,
     sw: u16,
     bip32_path: &'a [bip32::ChildNumber],
-    sighash: bitcoin::SigHashType,
+    sighash: bitcoin::EcdsaSighashType,
     tx_locktime: u32,
 }
 
@@ -698,7 +700,7 @@ impl<'a> UntrustedHashSign<'a> {
     /// Constructor
     pub fn new<P: AsRef<[bip32::ChildNumber]>>(
         bip32_path: &'a P,
-        sighash: bitcoin::SigHashType,
+        sighash: bitcoin::EcdsaSighashType,
         tx_locktime: u32,
     ) -> Self {
         UntrustedHashSign {
@@ -731,7 +733,7 @@ impl<'a> Command for UntrustedHashSign<'a> {
         }
         ret.push(0x00); // user validation code
         let _ = ret.write_u32::<BigEndian>(self.tx_locktime);
-        ret.push(self.sighash.as_u32() as u8);
+        ret.push(self.sighash.to_u32() as u8);
         Some(ret)
     }
 

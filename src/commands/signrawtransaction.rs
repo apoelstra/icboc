@@ -21,7 +21,7 @@
 
 use anyhow::Context;
 use icboc::{self, Dongle};
-use miniscript::bitcoin::{self, consensus, hashes::hex::FromHex};
+use miniscript::bitcoin::{self, consensus, ecdsa, hashes::hex::FromHex};
 use miniscript::DescriptorTrait;
 use serde::Deserialize;
 use std::cell::RefCell;
@@ -126,7 +126,7 @@ impl super::Command for SignRawTransaction {
                 .with_context(|| format!("satisfying input {}", n))?;
 
             input.script_sig = script_sig;
-            input.witness = wit;
+            input.witness = bitcoin::Witness::from_vec(wit);
         }
 
         println!(
@@ -149,7 +149,7 @@ struct Satisfier<'tx, 'd, 'c, D> {
 }
 
 impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'tx, 'd, 'c, D> {
-    fn lookup_sig(&self, pk: &icboc::CachedKey) -> Option<miniscript::BitcoinSig> {
+    fn lookup_ecdsa_sig(&self, pk: &icboc::CachedKey) -> Option<ecdsa::EcdsaSig> {
         let mut dongle = self.dongle.borrow_mut();
         dongle
             .transaction_input_start(
@@ -173,7 +173,7 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
         dongle
             .transaction_sign(
                 &pk.desc_key.full_derivation_path(),
-                bitcoin::SigHashType::All,
+                bitcoin::EcdsaSighashType::All,
                 self.tx.lock_time,
             )
             .map_err(|e| {
@@ -181,17 +181,18 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
                 e
             })
             .ok()
-            .map(|sig| (sig, bitcoin::SigHashType::All))
+            .map(|sig| ecdsa::EcdsaSig::sighash_all(sig))
     }
 
     fn lookup_pkh_pk(&self, pk: &icboc::CachedKey) -> Option<icboc::CachedKey> {
         Some(pk.clone())
     }
 
-    fn lookup_pkh_sig(
+    fn lookup_pkh_ecdsa_sig(
         &self,
         pk: &icboc::CachedKey,
-    ) -> Option<(bitcoin::PublicKey, miniscript::BitcoinSig)> {
-        self.lookup_sig(pk).map(|sig| (pk.key, sig))
+    ) -> Option<(bitcoin::PublicKey, ecdsa::EcdsaSig)> {
+        self.lookup_ecdsa_sig(pk)
+            .map(|sig| (bitcoin::PublicKey::new(pk.key), sig))
     }
 }

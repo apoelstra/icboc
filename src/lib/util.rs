@@ -15,7 +15,7 @@
 //! # Miscellaneous Functions
 
 use miniscript::bitcoin::secp256k1;
-use miniscript::bitcoin::secp256k1::recovery::{RecoverableSignature, RecoveryId};
+use miniscript::bitcoin::secp256k1::ecdsa::{self, RecoverableSignature, RecoveryId};
 /*
 use base64;
 use bitcoin::{Transaction, Script, VarInt};
@@ -68,16 +68,16 @@ pub fn parse_ledger_signature_recoverable(
     } else {
         RecoveryId::from_i32(0).unwrap()
     };
-    let sig = secp256k1::Signature::from_der_lax(sig)?;
+    let sig = ecdsa::Signature::from_der_lax(sig)?;
     RecoverableSignature::from_compact(&sig.serialize_compact(), recid)
 }
 
 /// Same as `parse_ledger_signature_recoverable` but don't bother with the recovery id
-pub fn parse_ledger_signature(sig: &mut [u8]) -> Result<secp256k1::Signature, secp256k1::Error> {
+pub fn parse_ledger_signature(sig: &mut [u8]) -> Result<ecdsa::Signature, secp256k1::Error> {
     if !sig.is_empty() && sig[0] == 0x31 {
         sig[0] = 0x30;
     }
-    secp256k1::Signature::from_der_lax(sig)
+    ecdsa::Signature::from_der_lax(sig)
 }
 
 /*
