@@ -65,9 +65,13 @@ impl KeyCache {
     }
 
     ///
-    fn lookup_descriptor_pubkey(&self, d: &DescriptorPublicKey) -> Option<secp256k1::PublicKey> {
-        match *d {
-            DescriptorPublicKey::SinglePub(ref single) => match single.key {
+    fn lookup_descriptor_pubkey(
+        &self,
+        d: &miniscript::DefiniteDescriptorKey,
+    ) -> Option<secp256k1::PublicKey> {
+        let d: DescriptorPublicKey = d.clone().into(); // FIXME https://github.com/rust-bitcoin/rust-miniscript/pull/492
+        match d {
+            DescriptorPublicKey::Single(ref single) => match single.key {
                 miniscript::descriptor::SinglePubKey::FullKey(key) => Some(key.inner),
                 miniscript::descriptor::SinglePubKey::XOnly(_) => todo!("No taproot support yet"),
             },

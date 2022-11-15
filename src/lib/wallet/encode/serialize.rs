@@ -111,15 +111,15 @@ impl Serialize for miniscript::bitcoin::OutPoint {
 }
 
 impl Serialize for miniscript::bitcoin::Transaction {
-    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         // FIXME a later version of rust-bitcoin will just directly return io::Errors here
-        bitcoin::consensus::Encodable::consensus_encode(self, w)
+        bitcoin::consensus::Encodable::consensus_encode(self, &mut w)
             .map(|_| ())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
-    fn read_from<R: Read>(r: R) -> io::Result<Self> {
-        bitcoin::consensus::Decodable::consensus_decode(r)
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        bitcoin::consensus::Decodable::consensus_decode(&mut r)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }

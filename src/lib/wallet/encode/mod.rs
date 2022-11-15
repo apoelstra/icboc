@@ -23,6 +23,7 @@ mod serialize;
 
 use crate::KeyCache;
 use miniscript::bitcoin;
+use miniscript::bitcoin::hashes::Hash;
 use std::io::{self, Read, Seek, Write};
 
 use self::serialize::{Serialize, MAX_VEC_ELEMS};
@@ -167,7 +168,9 @@ impl Serialize for EncTxo {
         self.wildcard_idx.write_to(&mut w)?;
         self.outpoint.write_to(&mut w)?;
         self.value.write_to(&mut w)?;
-        self.spent.unwrap_or(Default::default()).write_to(&mut w)?;
+        self.spent
+            .unwrap_or(bitcoin::Txid::all_zeros())
+            .write_to(&mut w)?;
         self.height.write_to(&mut w)?;
         self.spent_height.write_to(w)
     }
@@ -180,7 +183,7 @@ impl Serialize for EncTxo {
             value: Serialize::read_from(&mut r)?,
             spent: {
                 let txid = Serialize::read_from(&mut r)?;
-                if txid == bitcoin::Txid::default() {
+                if txid == bitcoin::Txid::all_zeros() {
                     None
                 } else {
                     Some(txid)

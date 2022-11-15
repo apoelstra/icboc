@@ -22,7 +22,6 @@
 use anyhow::Context;
 use icboc::{self, Dongle};
 use miniscript::bitcoin::{self, consensus, ecdsa, hashes::hex::FromHex};
-use miniscript::DescriptorTrait;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::path::Path;
@@ -174,7 +173,7 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
             .transaction_sign(
                 &pk.desc_key.full_derivation_path(),
                 bitcoin::EcdsaSighashType::All,
-                self.tx.lock_time,
+                self.tx.lock_time.to_u32(),
             )
             .map_err(|e| {
                 println!("signing transaction input: {} {}", self.input_idx, e);
@@ -182,17 +181,5 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
             })
             .ok()
             .map(|sig| ecdsa::EcdsaSig::sighash_all(sig))
-    }
-
-    fn lookup_pkh_pk(&self, pk: &icboc::CachedKey) -> Option<icboc::CachedKey> {
-        Some(pk.clone())
-    }
-
-    fn lookup_pkh_ecdsa_sig(
-        &self,
-        pk: &icboc::CachedKey,
-    ) -> Option<(bitcoin::PublicKey, ecdsa::EcdsaSig)> {
-        self.lookup_ecdsa_sig(pk)
-            .map(|sig| (bitcoin::PublicKey::new(pk.key), sig))
     }
 }

@@ -17,7 +17,7 @@
 //! Information associated to a wallet-generated address
 //!
 
-use miniscript::{self, bitcoin, DescriptorTrait};
+use miniscript::{self, bitcoin};
 use std::{
     cmp, fmt,
     sync::{Arc, Mutex},

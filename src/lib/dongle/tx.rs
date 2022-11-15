@@ -48,7 +48,7 @@ pub fn encode<T: Encodable>(
     piece_len: usize,
 ) -> Vec<u8> {
     // Compute the new object's length
-    let len = obj.consensus_encode(io::sink()).unwrap();
+    let len = obj.consensus_encode(&mut io::sink()).unwrap();
     // Start a new piece if necessary
     if current_piece.len() + len > piece_len {
         pieces.push(current_piece);

@@ -21,14 +21,18 @@ mod address;
 mod encode;
 mod txo;
 
-use miniscript::bitcoin::{self, hashes::hash160, secp256k1};
-use miniscript::{self, DescriptorTrait, TranslatePk2};
+use miniscript::bitcoin::{
+    self,
+    hashes::{hash160, ripemd160, sha256},
+    secp256k1,
+};
+use miniscript::{self, hash256, TranslatePk};
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::{
     cmp,
     collections::hash_map::Entry,
+    convert::Infallible,
     fmt,
     io::{Read, Seek, Write},
     sync::{Arc, Mutex},
@@ -258,7 +262,7 @@ impl Wallet {
     fn cache_key<D: Dongle>(
         dongle: &mut D,
         key_cache: &mut KeyCache,
-        key: &miniscript::DescriptorPublicKey,
+        key: &miniscript::DefiniteDescriptorKey,
     ) -> Result<secp256k1::PublicKey, Error> {
         dongle.get_wallet_public_key(key, key_cache)
     }
@@ -270,15 +274,12 @@ impl Wallet {
         desc: &miniscript::Descriptor<miniscript::DescriptorPublicKey>,
         index: u32,
     ) -> Result<miniscript::Descriptor<CachedKey>, Error> {
-        let dongle = RefCell::new(dongle);
-        let key_cache = RefCell::new(&mut self.key_cache);
-        desc.translate_pk2(|key| {
-            let derived = key.clone().derive(index);
-            Ok(CachedKey {
-                key: Wallet::cache_key(*dongle.borrow_mut(), *key_cache.borrow_mut(), &derived)?,
-                desc_key: derived,
-            })
-        })
+        let mut translator = KeyCachingTranslator {
+            dongle,
+            key_cache: &mut self.key_cache,
+            index,
+        };
+        desc.translate_pk(&mut translator)
     }
 
     /// Adds a new descriptor to the wallet. Returns the number of new keys
@@ -347,18 +348,19 @@ impl Wallet {
             wildcard_idx
         };
 
-        let desc_arc = self.descriptors[descriptor_idx].clone();
-        let inst = desc_arc.desc.translate_pk2_infallible(|key| {
-            let derived = key.clone().derive(wildcard_idx);
-            CachedKey {
-                key: self.key_cache.lookup_descriptor_pubkey(&derived).unwrap(),
-                desc_key: derived,
-            }
-        });
+        let mut translator = CachedKeyTranslator {
+            key_cache: &self.key_cache,
+            index: wildcard_idx,
+        };
+        // Unwrap safe since the error type here is `Infallible`
+        let inst = self.descriptors[descriptor_idx]
+            .desc
+            .translate_pk(&mut translator)
+            .unwrap();
         let spk = inst.script_pubkey();
 
         let new_addr = Arc::new(Address {
-            descriptor: desc_arc,
+            descriptor: Arc::clone(&self.descriptors[descriptor_idx]),
             index: wildcard_idx,
             instantiated_descriptor: inst,
             user_data: Mutex::new(Some(UserData {
@@ -477,7 +479,7 @@ impl Wallet {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CachedKey {
     /// Instantiated descriptor
-    pub desc_key: miniscript::DescriptorPublicKey,
+    pub desc_key: miniscript::DefiniteDescriptorKey,
     /// Cached copy of the resulting bitcoin PublicKey
     pub key: secp256k1::PublicKey,
 }
@@ -489,10 +491,10 @@ impl fmt::Display for CachedKey {
 }
 
 impl miniscript::MiniscriptKey for CachedKey {
-    type Hash = Self;
-    fn to_pubkeyhash(&self) -> Self::Hash {
-        self.clone()
-    }
+    type Hash160 = hash160::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Sha256 = sha256::Hash;
 }
 
 impl miniscript::ToPublicKey for CachedKey {
@@ -500,8 +502,65 @@ impl miniscript::ToPublicKey for CachedKey {
         bitcoin::PublicKey::new(self.key)
     }
 
-    fn hash_to_hash160(hash: &<Self as miniscript::MiniscriptKey>::Hash) -> hash160::Hash {
-        miniscript::MiniscriptKey::to_pubkeyhash(&hash.to_public_key())
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
+    }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
+        *hash
+    }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
+        *hash
+    }
+}
+
+/// A `Translator` for use with `miniscript::TranslatePk::translate_pk` which converts
+/// a `DescriptorPublicKey` to a `CachedKey`, caching it along the way
+pub struct KeyCachingTranslator<'dongle, 'keycache, D: Dongle> {
+    pub dongle: &'dongle mut D,
+    pub key_cache: &'keycache mut KeyCache,
+    pub index: u32,
+}
+
+impl<'dongle, 'keycache, D: Dongle>
+    miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Error>
+    for KeyCachingTranslator<'dongle, 'keycache, D>
+{
+    miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Error);
+
+    fn pk(&mut self, pk: &miniscript::DescriptorPublicKey) -> Result<CachedKey, Error> {
+        let derived = pk.clone().at_derivation_index(self.index);
+        Ok(CachedKey {
+            key: Wallet::cache_key(self.dongle, self.key_cache, &derived)?,
+            desc_key: derived,
+        })
+    }
+}
+
+/// A `Translator` for use with `miniscript::TranslatePk::translate_pk` which converts
+/// a `DescriptorPublicKey` to a `CachedKey` by looking it up in a given cache.
+///
+/// The translation will panic if the key is not actually in the cache. However,
+/// this translation is only called when given an `Address`, which is impossible
+/// to construct without first having cached the key.
+pub struct CachedKeyTranslator<'keycache> {
+    pub key_cache: &'keycache KeyCache,
+    pub index: u32,
+}
+
+impl<'keycache> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallible>
+    for CachedKeyTranslator<'keycache>
+{
+    miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Infallible);
+
+    fn pk(&mut self, pk: &miniscript::DescriptorPublicKey) -> Result<CachedKey, Infallible> {
+        let derived = pk.clone().at_derivation_index(self.index);
+        Ok(CachedKey {
+            key: self.key_cache.lookup_descriptor_pubkey(&derived).unwrap(),
+            desc_key: derived,
+        })
     }
 }
 
