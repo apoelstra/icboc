@@ -21,6 +21,9 @@ Since ICBOC 3D, you can compile with the "jsonrpc" cargo feature flag and
 it will scan the blockchain for you by connecting to a local bitcoind. This
 is not necessary.
 
+**If you are looking for the original ICBOC please use the 2.0.1 tag of this
+repository.** All development here is now ICBOC 3D.
+
 ## Usage
 
 To generate a new wallet, just run
