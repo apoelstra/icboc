@@ -1,5 +1,5 @@
-// ICBOC
-// Written in 2017 by
+// ICBOC 3D
+// Written in 2021 by
 //   Andrew Poelstra <icboc@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -14,6 +14,9 @@
 
 //! # Miscellaneous Functions
 
+use miniscript::bitcoin::secp256k1;
+use miniscript::bitcoin::secp256k1::recovery::{RecoverableSignature, RecoveryId};
+/*
 use base64;
 use bitcoin::{Transaction, Script, VarInt};
 use bitcoin::network::encodable::ConsensusEncodable;
@@ -24,7 +27,9 @@ use secp256k1::{Secp256k1, Signature, SecretKey};
 
 use spend::Spend;
 use error::Error;
+*/
 
+/*
 /// Compute the SHA256 of some slice
 pub fn hash_sha256(input: &[u8]) -> [u8; 32] {
     let mut result = [0; 32];
@@ -33,71 +38,49 @@ pub fn hash_sha256(input: &[u8]) -> [u8; 32] {
     hasher.result(&mut result);
     result
 }
+*/
 
-// The returned signature format is a bit funny. It is ASN.1 according to
-// the docs, but the first byte, which is uniformly 0x30 (SEQUENCE OF) in
-// libsecp, is alternately 0x30 (SEQUENCE OF) or 0x31 (SET OF). Further,
-// while s is always encoded in 32 bytes, r is encoded in either 32 or 33,
-// depending on which y coordinate this r corresponds to. The docs suggest
-// using the parity of the first byte to determine this and to translate
-// it into a recovery ID, which is clever and probably the most sensible
-// thing to translate this format into Core's `signmessage` format ....
-// but is otherwise kinda crazy.
-//
-// Instead what we do is just pull the 32-byte r and s values out, if r
-// was previously 33 byte I'll flip s, and then before verification I'll
-// reassemble it into a 70-byte DER signature.
-//
-// The following two functions do this.
-
-const NEG_ONE: [u8; 32] = [
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
-    0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b,
-    0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x40
-];
-
-/// Parses a signature returned from the Ledger device into a "compact"
-/// form which is 32 bytes `r` followed by 32 bytes `s`. Flips `s` if
-/// necessary. This does NOT result in BIP66-compliant low-s signatures,
-/// it merely makes the public nonce correspond to the encoded `r` value
-/// in a consistent way.
+/// Parse a Ledger-encoded signmessage signature
 ///
-/// This may panic on bad input.
-pub fn convert_ledger_der_to_compact(sig: &[u8]) -> Result<[u8; 64], Error> {
-    let r_len = sig[3] as usize;
-    let s_len = sig[5 + r_len] as usize;
-    let r_off = 4;
-    let s_off = 6 + r_len;
-
-    if s_len > 32 || r_len > 33 {
-        return Err(Error::BadSignature);
-    }
-
-    let mut ret = [0; 64];
-    if r_len < 33 {
-        // If it's already in a 32r-32s form, awesome, just strip out the ASN.1
-        // metadata and maybe pad in some zeroes
-        ret[32 - r_len..32].copy_from_slice(&sig[r_off..r_off + r_len]);
-        ret[64 - s_len..64].copy_from_slice(&sig[s_off..s_off + s_len]);
+/// May edit the passed signature in place. Make a copy if you need to preserve
+/// it for some reason.
+///
+/// The Ledger signature format is a bit funny. It is ASN.1 according to
+/// the docs, but the first byte, which is uniformly 0x30 (SEQUENCE OF) in
+/// DER, is alternately 0x30 (SEQUENCE OF) or 0x31 (SET OF). Further, while
+/// s is always encoded in 32 bytes (in DER it may be variable), r is encoded
+/// in either 32 or 33, depending on which y coordinate this r corresponds
+/// (also varable, and signed to boot).
+/// The docs suggest using the parity of the first byte to determine this
+/// and to translate it into a recovery ID, which is clever I suppose, but
+/// not DER (and barely ASN.1).
+///
+/// Anyway, to parse these, the most straightforward thing is to pull the
+/// recid out of the 30/31 byte as suggested, then force the byte to 0x30
+/// and parse using from_der_lax.
+pub fn parse_ledger_signature_recoverable(
+    sig: &mut [u8],
+) -> Result<RecoverableSignature, secp256k1::Error> {
+    // Check recid
+    let recid = if !sig.is_empty() && sig[0] == 0x31 {
+        sig[0] = 0x30;
+        RecoveryId::from_i32(1).unwrap()
     } else {
-        assert_eq!(r_len, 33);  // the early return up top ensures this
-        // Otherwise there is a nonzero bit in front of r. We have to negate s
-        // to make this bit zero, then we can pretend it doesn't exist
-        let secp = Secp256k1::without_caps();
-
-        let neg_one = SecretKey::from_slice(&secp, &NEG_ONE).unwrap();
-        let mut s_arr = [0; 32];
-        s_arr[32 - s_len..32].copy_from_slice(&sig[s_off..s_off + s_len]);
-        let mut s_sk = SecretKey::from_slice(&secp, &s_arr)?;
-        s_sk.mul_assign(&secp, &neg_one)?;
-
-        ret[0..32].copy_from_slice(&sig[r_off + 1..r_off + r_len]);
-        ret[32..64].copy_from_slice(&s_sk[..]);
-    }
-    Ok(ret)
+        RecoveryId::from_i32(0).unwrap()
+    };
+    let sig = secp256k1::Signature::from_der_lax(sig)?;
+    RecoverableSignature::from_compact(&sig.serialize_compact(), recid)
 }
 
+/// Same as `parse_ledger_signature_recoverable` but don't bother with the recovery id
+pub fn parse_ledger_signature(sig: &mut [u8]) -> Result<secp256k1::Signature, secp256k1::Error> {
+    if !sig.is_empty() && sig[0] == 0x31 {
+        sig[0] = 0x30;
+    }
+    secp256k1::Signature::from_der_lax(sig)
+}
+
+/*
 /// Expands a compact-encoded sig into one that can be verified by libsecp
 pub fn convert_compact_to_secp(sig: &[u8]) -> Result<Signature, Error> {
     let secp = Secp256k1::without_caps();
@@ -159,7 +142,7 @@ fn encode_marking_cutpoints<'a, T>(data: &T, buf: &'a mut Vec<u8>, cuts: &mut Ve
 
 /// Wrapper around `encode_marking_cutpoint` that encodes a Transaction correctly
 pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Copied structure from rust-bitcoin transaction.rs, with TxIn and TxOut unrolled
@@ -190,7 +173,7 @@ pub fn encode_transaction_with_cutpoints(tx: &Transaction, max_size: usize) -> (
 /// Wrapper around `encode_marking_cutpoint` that encodes a Spend's inputs correctly
 /// No segwit support
 pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // This is quite different from the Bitcoin format as we have to replace some
@@ -216,7 +199,7 @@ pub fn encode_spend_inputs_with_cutpoints(spend: &Spend, index: usize, max_size:
 
 /// Wrapper around `encode_marking_cutpoint` that encodes a Spend's outputs correctly
 pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (Vec<u8>, Vec<usize>) {
-    let mut ret_ser_tx = vec![]; 
+    let mut ret_ser_tx = vec![];
     let mut ret_cuts = vec![0];  // mark initial cut at 0
 
     // Encode outputs
@@ -230,7 +213,4 @@ pub fn encode_spend_outputs_with_cutpoints(spend: &Spend, max_size: usize) -> (V
     (ret_ser_tx, ret_cuts)
 }
 
-
-
-
-
+*/

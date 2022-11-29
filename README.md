@@ -1,114 +1,100 @@
 
-# ICBOC
+# ICBOC 3D
 
-ICBOC, or "Ice Cold Box of Coins", was originally named Icebox, but it turned
-out that this collided with the pre-existing [Icebox project](https://github.com/ConsenSys/icebox).
+ICBOC 3D, or "Ice Cold Box of Coins Descriptors Descriptors Descriptors",
+was originally named Icebox, but this collided with some old ConsenSys
+project. Unsurprising, given that it's a natural name for a cold wallet.
+
 The current name was chosen to be awkward enough to avoid collisions, while
-still sounding kinda like "icebox".
+still sounding kinda like "icebox". In 2021, it was rewritten to work with
+descriptors, and the suffix 3D was added.
 
-ICBOC is a cold wallet designed to work with the Ledger Nano S on an offline
+ICBOC 3D is a cold wallet designed to work with the Ledger Nano S on an offline
 computer. It is designed for power users willing to do a fair bit of work to
 send transactions. Currently it is under development and it is strongly
 discouraged to use it.
 
-It is designed around the principle that each address corresponds to one
-payment, and while address should appear uniformly random, the wallet should
-tie this information to the address in a verifiable, untamperable way.
-
-To protect privacy, each wallet is created with support for a fixed number
-of addresses. Initially an encrypted block of zeroes is stored in place of
-the address information so that the size of the wallet file never changes.
-
 All keys are stored on the dongle; what the "wallet" stores on the PC is a
 database of information about addresses that have been used.
 
+Since ICBOC 3D, you can compile with the "jsonrpc" cargo feature flag and
+it will scan the blockchain for you by connecting to a local bitcoind. This
+is not necessary.
+
+**If you are looking for the original ICBOC please use the 2.0.1 tag of this
+repository.** All development here is now ICBOC 3D.
+
 ## Usage
 
-To generate a new wallet, choose a BIP44 account number and a number of
-address to support initially.
+To generate a new wallet, just run
 
-    icboc wallet.icboc.dat init 0 100
+    icboc3d wallet.icboc.dat init
 
-To get a new address, do
+Both commands will request you sign a fixed hash with a curiously large
+number of 0 bytes in it. This signature is used as an encryption key for
+the wallet, since this was the cleanest way I could think of to get
+key-like material from the Nano S and require user action when getting it.
+(Actual public keys, addresses, chaincodes, etc., can all be obtained
+from the Ledger without user intervention.)
 
-    icboc wallet.icboc.dat getaddress
+The `init` command (and all commands) will output a master public key, such as
 
-This will prompt you for some information and eventually output an address
-entry:
+    Master xpub: xpub661MyMwAqRbcFNH5PfeY7Nq2aDmC98jGbLe7ApvS7LnRnf2NNw9HUPyr6AycFzkchy4vn23J2HSxQRMSsVsRJZ4ihoZoJEnAnMYtmLWmSg7
 
-    Signed Entry:
-       index: 0
-     address: 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
-        txid: no associated output
-     created: 2017-03-29 16:28:10-0000
-     (after): 0000000000000000024068e6d589797e2b1d9a52498c65b5ef5600caedb37aee
-        user: apoelstra@home
-        note: payment for whats-its-contract
+You can use this key to generate a descriptor which you can import, e.g.
 
-You can retrieve this at any time by using its index:
+    icboc3d wallet.icboc.dat importdescriptor '{"desc": "pkh(xpub661MyMwAqRbcFNH5PfeY7Nq2aDmC98jGbLe7ApvS7LnRnf2NNw9HUPyr6AycFzkchy4vn23J2HSxQRMSsVsRJZ4ihoZoJEnAnMYtmLWmSg7/44h/0h/0h/1/*)", "range_low": 0, "range_high": 100}'
 
-    icboc wallet.icboc.dat info 0
+Currently icboc only supports the `pkh` descriptor, though we will add
+support for `wpkh` soon. Going further than that may be difficult with
+the Ledger Nano S, which makes a lot of faulty assumptions about what
+Bitcoin transactions are made of.
 
-or by its address (though this will require retrieving addresses from the
-dongle until it's found, there is no index for privacy reasons):
+Once you've imported a descriptor, you can see it with
 
-    icboc wallet.icboc.dat info 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
+    icboc3d wallet.icboc.dat info
 
-Later, if you receive coins to this address, you can inform the wallet by
-giving it the entire hex-encoded rawtransaction. The entire transaction is
-required by the Ledger because this is the only way it can confirm the
-input values it's signing off on, when signing coins. (One of the many
-SegWit provides is to fix this inconvenience.)
+You'll see that each descriptor has an index, which is used to identify it in
+the wallet. When there is only one descriptor it will have index 0. You can
+get a new address from it by running
 
-    icboc wallet.icboc.dat receive 02000000011aef8cfaec49ab111d6240c6ce609d430c7ec990307dfca6f6addb7c82152e710000000000feffffff02935b9800000000001976a9141285a7fe04cd6df5e5b93b56bc0ef171332e85f588ac40597307000000001976a9140295ec35d638c16b25608b4e362a214a5692d20088ac00000000
+    icboc3d wallet.icboc.dat getnewaddress '{ "descriptor": 0 }'
 
-The wallet will read the transaction, detect which outputs belong to it,
-and update the appropriate entries:
+Then receive coins either by copying raw transactions and running
 
-    17:04:24 [INFO] Receive to entry 0. Amount 125000000, outpoint 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5:1!
+    icboc3d wallet.icboc.dat receive '{ "tx": "<hex string>" }'
 
-It will ask you to re-sign for any entries that changed. The entries are
-updated to reflect the unspent output information, as
+or by compiling with the `jsonrpc` cargo feature, setting up a bitcoind with
+a RPC auth cookie in `~/.bitcoin/.cookie`, and running
 
-    Signed Entry:
-       index: 0
-     address: 1EfxCKm257NbVJhJCVMzyhkvuJh1j6Zyx
-        txid: 6350216a48084eb1998cc2e90a76e5a7b6591100d738615c59eec2097d4f18c5
-        vout: 1
-       spent: false
-      amount: 125000000
-     created: 2017-03-29 16:28:10-0000
-     (after): 0000000000000000024068e6d589797e2b1d9a52498c65b5ef5600caedb37aee
-        user: apoelstra@home
-        note: payment for whats-its-contract
-                                            
+    icboc3d wallet.icboc.dat rescan '{ "start_from": 630000 }'
 
+where the `start_from` argument may be omitted (though this will take a very
+long time).
 
-## Version 1
+## Spending coins
 
-The first version of ICBOC is designed to work with the Bitcoin app that comes
-with the Nano S, whose [source code is available here](https://github.com/LedgerHQ/blue-app-btc/issues).
-As such, it will not be able to do everything that ICBOC is eventually intended
-to do. Its features are
+You can see your available coins with
 
- - [x] Generate addresses, prompting the user for some extra information to tag it with
- - [x] Sign said information with the address and store this in an encrypted form
- - [x] Display information, including verifying the signature, about generated addresses
- - [x] Error out when the user attempts to generate the same address twice
- - [x] Search wallet by address rather than BIP32 index
- - [x] Update wallet when payment is received to note txid/vout/amount
- - [x] Allow extending the wallet to add more address entries
- - [x] Sign transactions
+    icboc3d wallet.icboc.dat listunspent
 
-## Version 2
+Create a new transaction from these by getting a new change address and then
+using `bitcoin-cli` or `hal` or whatever to construct a raw transaction. Then
+run
 
-The next version of ICBOC will include its own Ledger application which will
-fork the Bitcoin app to add some extra functionality.
+    icboc3d wallet.icboc.dat signrawtransaction '{ "tx": "<hex string>" }'
 
- - [ ] Do decryption/encryption on the dongle rather than querying for encryption keys
- - [ ] Commit to data in the address itself via pay-to-contract rather than just signing it
- - [ ] Use sign-to-contract to support [Greg's sidechannel-blocking nonce choosing scheme](https://botbot.me/freenode/secp256k1/2017-08-12/?msg=89759015&page=1)
- - [ ] Detect and warn when a wallet has been restored from an out-of-date backup
- - [ ] Faster lookup of next-unused-index
+ICBOC 3D is smart enough to recognize its own change addresses, though the
+Nano S requires there be only one, and that it use a `pkh` descriptor. Once
+signed, you can broadcast the raw transaction however you like, and then
+inform ICBOC 3D about it by running
 
+    icboc3d wallet.icboc.dat receive '{ "tx": "<hex string of signed tx>" }'
+
+## Migrating from ICBOC
+
+You can import the descriptor and all your notes from an old ICBOC wallet by
+running
+
+    icboc3d wallet.icboc.dat importicboc '{ "file":"old-icboc-wallet.dat" }'
 
