@@ -17,7 +17,7 @@
 //! Data types which can be read and written to the wallet backing store
 //!
 
-use miniscript::bitcoin::{self, hashes::Hash, util::bip32};
+use miniscript::bitcoin::{self, hashes::Hash, secp256k1, util::bip32};
 use std::io::{self, Read, Write};
 use std::str::FromStr;
 
@@ -111,15 +111,15 @@ impl Serialize for miniscript::bitcoin::OutPoint {
 }
 
 impl Serialize for miniscript::bitcoin::Transaction {
-    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         // FIXME a later version of rust-bitcoin will just directly return io::Errors here
-        bitcoin::consensus::Encodable::consensus_encode(self, w)
+        bitcoin::consensus::Encodable::consensus_encode(self, &mut w)
             .map(|_| ())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
-    fn read_from<R: Read>(r: R) -> io::Result<Self> {
-        bitcoin::consensus::Decodable::consensus_decode(r)
+    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+        bitcoin::consensus::Decodable::consensus_decode(&mut r)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
@@ -207,24 +207,13 @@ impl Serialize for String {
 
 // bitcoin types
 
-impl Serialize for bitcoin::PublicKey {
-    fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
-        self.write_into(w)
+impl Serialize for secp256k1::PublicKey {
+    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        w.write_all(&self.serialize())
     }
 
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        // FIXME copied from https://github.com/rust-bitcoin/rust-bitcoin/pull/542 inline this when that is merged
-        let mut bytes = [0; 65];
-        let byte_sl;
-        r.read_exact(&mut bytes[0..1])?;
-        if bytes[0] < 4 {
-            r.read_exact(&mut bytes[1..33])?;
-            byte_sl = &bytes[0..33];
-        } else {
-            r.read_exact(&mut bytes[1..65])?;
-            byte_sl = &bytes[0..65];
-        }
-        Self::from_slice(byte_sl).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    fn read_from<R: Read>(r: R) -> io::Result<Self> {
+        bitcoin::PublicKey::read_from(r).map(|key| key.inner)
     }
 }
 

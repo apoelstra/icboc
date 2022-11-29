@@ -17,7 +17,7 @@
 //! Transaction outputs
 //!
 
-use miniscript::{bitcoin, DescriptorTrait};
+use miniscript::bitcoin;
 use std::{cmp, fmt, hash, sync::Arc};
 
 /// A (potentially spent) transaction output tracked by the wallet

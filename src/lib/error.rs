@@ -75,4 +75,6 @@ pub enum Error {
     UnexpectedEof,
     #[error("device did something we do not support")]
     Unsupported,
+    #[error("we do not yet have taproot support")]
+    NoTaprootSupport,
 }

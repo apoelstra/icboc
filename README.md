@@ -24,6 +24,10 @@ is not necessary.
 **If you are looking for the original ICBOC please use the 2.0.1 tag of this
 repository.** All development here is now ICBOC 3D.
 
+## MSRV
+
+The minimum supported Rust version of this crate is **1.48**.
+
 ## Usage
 
 To generate a new wallet, just run

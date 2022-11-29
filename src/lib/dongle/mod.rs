@@ -17,7 +17,7 @@
 //! Abstract API for communicating with the device
 //!
 
-use miniscript::bitcoin::secp256k1;
+use miniscript::bitcoin::secp256k1::{self, ecdsa};
 use miniscript::bitcoin::util::bip32;
 use miniscript::{self, bitcoin};
 
@@ -108,11 +108,17 @@ pub trait Dongle {
     /// Obtains a bitcoin pubkey by querying the Ledger for a given BIP32 path
     fn get_wallet_public_key(
         &mut self,
-        key: &miniscript::DescriptorPublicKey,
+        key: &miniscript::DefiniteDescriptorKey,
         key_cache: &mut KeyCache,
-    ) -> Result<bitcoin::PublicKey, Error> {
-        match *key {
-            miniscript::DescriptorPublicKey::SinglePub(ref single) => Ok(single.key),
+    ) -> Result<secp256k1::PublicKey, Error> {
+        // FIXME once https://github.com/rust-bitcoin/rust-miniscript/pull/492 is in we can just convert
+        // the reference without cloning. with as_descriptor_public_key.
+        let key: miniscript::DescriptorPublicKey = key.clone().into();
+        match key {
+            miniscript::DescriptorPublicKey::Single(ref single) => match single.key {
+                miniscript::descriptor::SinglePubKey::FullKey(key) => Ok(key.inner),
+                miniscript::descriptor::SinglePubKey::XOnly(_) => Err(Error::NoTaprootSupport),
+            },
             miniscript::DescriptorPublicKey::XPub(ref xkey) => {
                 if let Some(entry) = key_cache.lookup(xkey.xkey, &xkey.derivation_path) {
                     return Ok(entry);
@@ -130,7 +136,7 @@ pub trait Dongle {
                         our_fingerprint: master_xpub.fingerprint(),
                     });
                 // Check for keyorigin mismatch
-                } else if let miniscript::DescriptorPublicKey::XPub(ref xkey) = *key {
+                } else if let miniscript::DescriptorPublicKey::XPub(ref xkey) = key {
                     if let Some((_, ref originpath)) = xkey.origin {
                         let dongle_xpub = self.get_public_key(originpath, false)?;
                         if dongle_xpub.public_key != xkey.xkey.public_key {
@@ -177,7 +183,7 @@ pub trait Dongle {
         &mut self,
         message: &[u8],
         bip32_path: &P,
-    ) -> Result<secp256k1::Signature, Error> {
+    ) -> Result<ecdsa::Signature, Error> {
         let command = message::SignMessagePrepare::new(bip32_path, message);
         let (sw, rev) = self.exchange(command)?;
         // This should never happen unless we exceed Ledger limits
@@ -293,14 +299,14 @@ pub trait Dongle {
     fn transaction_sign<P: AsRef<[bip32::ChildNumber]>>(
         &mut self,
         bip32_path: &P,
-        sighash: bitcoin::SigHashType,
+        sighash: bitcoin::EcdsaSighashType,
         tx_locktime: u32,
-    ) -> Result<secp256k1::Signature, Error> {
+    ) -> Result<ecdsa::Signature, Error> {
         let command = message::UntrustedHashSign::new(bip32_path, sighash, tx_locktime);
         let (sw, mut rev) = self.exchange(command)?;
         if sw == ledger_const::sw::OK {
             rev[0] = 0x30;
-            secp256k1::Signature::from_der_lax(&rev).map_err(Error::from)
+            ecdsa::Signature::from_der_lax(&rev).map_err(Error::from)
         } else {
             Err(Error::ResponseBadStatus {
                 apdu: ledger_const::Instruction::UntrustedHashSign,
