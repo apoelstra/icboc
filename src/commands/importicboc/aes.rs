@@ -20,6 +20,9 @@
 //!
 
 #![allow(non_snake_case)]
+#![allow(clippy::manual_rotate)]
+#![allow(clippy::needless_late_init)]
+#![allow(clippy::wrong_self_convention)]
 
 const N_ROUNDS: usize = 14;
 const N_KEYWORDS: usize = 8;
@@ -31,7 +34,7 @@ struct State {
 
 impl State {
     /// colmun_0(ret) = column_col(self)
-    fn from_column(self: &Self, col: usize) -> State {
+    fn from_column(&self, col: usize) -> State {
         State {
             slice: [
                 (self.slice[0] >> col) & 0x1111,
