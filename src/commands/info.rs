@@ -28,18 +28,13 @@ pub struct Info;
 /// Gets information
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Options {
-    #[serde(default)]
-    descriptors: Vec<usize>,
-    #[serde(default)]
-    txos: Vec<bitcoin::OutPoint>,
-}
+pub struct Options {}
 
 impl super::Command for Info {
-    type Options = Options;
+    type Options = ();
 
     fn execute<D: Dongle, P: AsRef<Path>>(
-        options: Self::Options,
+        _: Self::Options,
         wallet_path: P,
         dongle: &mut D,
     ) -> anyhow::Result<()> {
