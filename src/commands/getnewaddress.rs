@@ -21,7 +21,6 @@ use anyhow::Context;
 use icboc::Dongle;
 use serde::Deserialize;
 use std::path::Path;
-use time;
 
 /// Gets/updates an address
 pub struct GetNewAddress;
@@ -68,8 +67,8 @@ impl super::Command for GetNewAddress {
         println!("{}", addr);
 
         super::save_wallet(&wallet, wallet_path, key, nonce)
-            .with_context(|| format!("saving wallet after import"))?;
+            .with_context(|| "saving wallet after import")?;
 
-        return Ok(());
+        Ok(())
     }
 }

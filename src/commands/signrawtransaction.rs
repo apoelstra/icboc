@@ -107,7 +107,7 @@ impl super::Command for SignRawTransaction {
             prev_tx: &unsigned_tx,
             dongle: RefCell::new(dongle),
             change_address: change,
-            trusted_inputs: trusted_inputs,
+            trusted_inputs,
         };
         for (n, input) in tx.input.iter_mut().enumerate() {
             satisfier.input_idx = n;
@@ -134,7 +134,7 @@ impl super::Command for SignRawTransaction {
         );
         println!("If you intend to broadcast this transaction you should likely run the 'receive' command with it.");
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -147,7 +147,7 @@ struct Satisfier<'tx, 'd, 'c, D> {
     trusted_inputs: Vec<icboc::TrustedInput>,
 }
 
-impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'tx, 'd, 'c, D> {
+impl<D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'_, '_, '_, D> {
     fn lookup_ecdsa_sig(&self, pk: &icboc::CachedKey) -> Option<ecdsa::EcdsaSig> {
         let mut dongle = self.dongle.borrow_mut();
         dongle
@@ -180,6 +180,6 @@ impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfi
                 e
             })
             .ok()
-            .map(|sig| ecdsa::EcdsaSig::sighash_all(sig))
+            .map(ecdsa::EcdsaSig::sighash_all)
     }
 }

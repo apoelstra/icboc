@@ -187,12 +187,12 @@ impl<'a> GetWalletPublicKey<'a> {
             reply: vec![],
             sw: 0,
             bip32_path: bip32_path.as_ref(),
-            display: display,
+            display,
         }
     }
 }
 
-impl<'a> Command for GetWalletPublicKey<'a> {
+impl Command for GetWalletPublicKey<'_> {
     fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;
@@ -295,12 +295,12 @@ impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
             reply: vec![],
             sw: 0,
             bip32_path: bip32_path.as_ref(),
-            message: message,
+            message,
         }
     }
 }
 
-impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
+impl Command for SignMessagePrepare<'_, '_> {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent_length > self.message.len() {
             unreachable!(); // sanity check
@@ -433,7 +433,7 @@ impl GetRandom {
             sent: false,
             reply: vec![],
             sw: 0,
-            count: count,
+            count,
         }
     }
 }
@@ -489,7 +489,7 @@ impl GetTrustedInput {
         GetTrustedInput {
             reply: vec![],
             sw: 0,
-            ser_tx: ser_tx,
+            ser_tx,
             vout: Some(vout),
         }
     }
@@ -559,9 +559,9 @@ impl UntrustedHashTransactionInputStart {
             super::tx::encode_input(tx, index, trusted_inputs, ledger::MAX_APDU_SIZE);
         ser_inputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputStart {
-            ser_inputs: ser_inputs,
+            ser_inputs,
             sent_first: false,
-            first_input: first_input,
+            first_input,
             sw: 0,
         }
     }
@@ -623,7 +623,7 @@ impl UntrustedHashTransactionInputFinalize {
         let mut ser_outputs = super::tx::encode_outputs(tx, ledger::MAX_APDU_SIZE);
         ser_outputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputFinalize {
-            ser_outputs: ser_outputs,
+            ser_outputs,
             change_path: change_address.and_then(wallet::Address::change_path),
             sw: 0,
         }
@@ -707,14 +707,14 @@ impl<'a> UntrustedHashSign<'a> {
             sent: false,
             reply: vec![],
             sw: 0,
-            bip32_path: &bip32_path.as_ref(),
-            sighash: sighash,
-            tx_locktime: tx_locktime,
+            bip32_path: bip32_path.as_ref(),
+            sighash,
+            tx_locktime,
         }
     }
 }
 
-impl<'a> Command for UntrustedHashSign<'a> {
+impl Command for UntrustedHashSign<'_> {
     fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;

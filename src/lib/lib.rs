@@ -21,11 +21,12 @@
 //!
 
 // Coding conventions
-#![deny(non_upper_case_globals)]
-#![deny(non_camel_case_types)]
-#![deny(non_snake_case)]
-#![deny(unused_mut)]
-#![deny(missing_docs)]
+#![warn(non_upper_case_globals)]
+#![warn(non_camel_case_types)]
+#![warn(non_snake_case)]
+#![warn(unused_mut)]
+#![warn(missing_docs)]
+#![allow(clippy::mutable_key_type)] // has false positives, has false negatives, 100% wrong IME
 
 pub mod constants;
 mod dongle;
@@ -64,7 +65,7 @@ impl KeyCache {
         Default::default()
     }
 
-    ///
+    /// Looks up a descriptor public key in the cache.
     fn lookup_descriptor_pubkey(
         &self,
         d: &miniscript::DefiniteDescriptorKey,
@@ -85,10 +86,7 @@ impl KeyCache {
         xpub: bip32::ExtendedPubKey,
         path: &bip32::DerivationPath,
     ) -> Option<secp256k1::PublicKey> {
-        self.map
-            .get(&xpub)
-            .and_then(|map| map.get(path))
-            .map(|key| *key)
+        self.map.get(&xpub).and_then(|map| map.get(path)).copied()
     }
 
     /// Adds a key to the map
@@ -98,10 +96,7 @@ impl KeyCache {
         path: bip32::DerivationPath,
         key: secp256k1::PublicKey,
     ) {
-        self.map
-            .entry(xpub)
-            .or_insert(HashMap::new())
-            .insert(path, key);
+        self.map.entry(xpub).or_default().insert(path, key);
     }
 }
 

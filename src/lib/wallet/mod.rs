@@ -151,14 +151,10 @@ impl Wallet {
                     outpoint: enc_txo.outpoint,
                     value: enc_txo.value,
                     height: enc_txo.height,
-                    spent_data: if let Some(txid) = enc_txo.spent {
-                        Some(SpentData {
-                            txid,
-                            height: enc_txo.spent_height,
-                        })
-                    } else {
-                        None
-                    },
+                    spent_data: enc_txo.spent.map(|txid| SpentData {
+                        txid,
+                        height: enc_txo.spent_height,
+                    }),
                 },
             );
         }
@@ -241,15 +237,15 @@ impl Wallet {
     }
 
     /// Iterator over all addresses generated in the wallet
-    pub fn addresses<'a>(&'a self) -> impl Iterator<Item = Arc<Address>> + 'a {
+    pub fn addresses(&self) -> impl Iterator<Item = Arc<Address>> + '_ {
         self.spk_address
             .values()
-            .cloned()
             .filter(|addr| addr.user_data.lock().unwrap().is_some())
+            .cloned()
     }
 
     /// Iterator over all TXOs tracked by the wallet
-    pub fn all_txos<'a>(&'a self) -> impl Iterator<Item = &'a Txo> {
+    pub fn all_txos(&self) -> impl Iterator<Item = &Txo> {
         self.txos.values()
     }
 
@@ -305,10 +301,10 @@ impl Wallet {
 
         let idx = self.descriptors.len();
         let desc_arc = Arc::new(Descriptor {
-            desc: desc,
+            desc,
             wallet_idx: idx,
-            low: low,
-            high: high,
+            low,
+            high,
             next_idx: Mutex::new(0),
         });
 
@@ -334,7 +330,7 @@ impl Wallet {
     }
 
     /// Adds a new address to the wallet.
-    pub fn add_address<'wallet>(
+    pub fn add_address(
         &mut self,
         descriptor_idx: usize,
         wildcard_idx: Option<u32>,
@@ -363,10 +359,7 @@ impl Wallet {
             descriptor: Arc::clone(&self.descriptors[descriptor_idx]),
             index: wildcard_idx,
             instantiated_descriptor: inst,
-            user_data: Mutex::new(Some(UserData {
-                time: time,
-                notes: notes,
-            })),
+            user_data: Mutex::new(Some(UserData { time, notes })),
         });
         self.spk_address.insert(spk, new_addr.clone());
         self.descriptor_address
@@ -376,12 +369,12 @@ impl Wallet {
     }
 
     /// Iterator over all descriptors in the wallet, and their index
-    pub fn descriptors<'a>(&'a self) -> impl Iterator<Item = &'a Descriptor> {
+    pub fn descriptors(&self) -> impl Iterator<Item = &Descriptor> {
         self.descriptors.iter().map(|arc| &**arc)
     }
 
     /// Gets the set of TXOs associated with a particular descriptor
-    pub fn txos_for<'a>(&'a self, descriptor_idx: usize) -> HashSet<&'a Txo> {
+    pub fn txos_for(&self, descriptor_idx: usize) -> HashSet<&Txo> {
         self.txos
             .values()
             .filter(|txo| txo.address.descriptor.wallet_idx == descriptor_idx)
@@ -389,18 +382,18 @@ impl Wallet {
     }
 
     /// Looks up a specific TXO
-    pub fn txo<'a>(&'a self, outpoint: bitcoin::OutPoint) -> Result<&'a Txo, Error> {
+    pub fn txo(&self, outpoint: bitcoin::OutPoint) -> Result<&Txo, Error> {
         match self.txos.get(&outpoint) {
             Some(txo) => Ok(txo),
-            None => return Err(Error::TxoNotFound(outpoint)),
+            None => Err(Error::TxoNotFound(outpoint)),
         }
     }
 
     /// Looks up a cached transaction
-    pub fn tx<'a>(&'a self, txid: bitcoin::Txid) -> Result<&'a bitcoin::Transaction, Error> {
+    pub fn tx(&self, txid: bitcoin::Txid) -> Result<&bitcoin::Transaction, Error> {
         match self.tx_cache.get(&txid) {
             Some(txo) => Ok(txo),
-            None => return Err(Error::TxNotFound(txid)),
+            None => Err(Error::TxNotFound(txid)),
         }
     }
 
@@ -421,9 +414,9 @@ impl Wallet {
                     Entry::Vacant(v) => {
                         v.insert(Txo {
                             address: addr.clone(),
-                            outpoint: outpoint,
+                            outpoint,
                             value: output.value,
-                            height: height,
+                            height,
                             spent_data: None,
                         });
                     }
@@ -446,7 +439,7 @@ impl Wallet {
                 }
                 txo.spent_data = Some(SpentData {
                     txid: tx.txid(),
-                    height: height,
+                    height,
                 });
                 spent.insert(input.previous_output);
             }
@@ -524,9 +517,8 @@ pub struct KeyCachingTranslator<'dongle, 'keycache, D: Dongle> {
     pub index: u32,
 }
 
-impl<'dongle, 'keycache, D: Dongle>
-    miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Error>
-    for KeyCachingTranslator<'dongle, 'keycache, D>
+impl<D: Dongle> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Error>
+    for KeyCachingTranslator<'_, '_, D>
 {
     miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Error);
 
@@ -550,8 +542,8 @@ pub struct CachedKeyTranslator<'keycache> {
     pub index: u32,
 }
 
-impl<'keycache> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallible>
-    for CachedKeyTranslator<'keycache>
+impl miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallible>
+    for CachedKeyTranslator<'_>
 {
     miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Infallible);
 

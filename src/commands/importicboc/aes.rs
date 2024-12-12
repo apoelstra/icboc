@@ -20,6 +20,9 @@
 //!
 
 #![allow(non_snake_case)]
+#![allow(clippy::manual_rotate)]
+#![allow(clippy::needless_late_init)]
+#![allow(clippy::wrong_self_convention)]
 
 const N_ROUNDS: usize = 14;
 const N_KEYWORDS: usize = 8;
@@ -31,7 +34,7 @@ struct State {
 
 impl State {
     /// colmun_0(ret) = column_col(self)
-    fn from_column(self: &Self, col: usize) -> State {
+    fn from_column(&self, col: usize) -> State {
         State {
             slice: [
                 (self.slice[0] >> col) & 0x1111,
@@ -145,7 +148,7 @@ impl State {
 
     /// S-box implementation based on the gate logic from:
     ///     Joan Boyar and Rene Peralta, A depth-16 circuit for the AES S-box.
-    ///     https://eprint.iacr.org/2011/332.pdf
+    ///     <https://eprint.iacr.org/2011/332.pdf>
     fn sub_bytes(&mut self, invert: bool) {
         /* Load the bit slices */
         let U0: u16 = self.slice[7];

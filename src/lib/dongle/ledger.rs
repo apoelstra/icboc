@@ -69,7 +69,7 @@ impl NanoS {
 
 /// Write a message encoded as a APDU to the Ledger device
 fn write_apdu(hid_dev: &hid::Device, mut data: &[u8]) -> Result<(), hid::Error> {
-    assert!(data.len() > 0);
+    assert!(!data.is_empty());
     assert!(data.len() < 0x1000);
 
     let mut sequence_no = 0u16;
@@ -84,13 +84,12 @@ fn write_apdu(hid_dev: &hid::Device, mut data: &[u8]) -> Result<(), hid::Error> 
         BigEndian::write_u16(&mut data_frame[3..5], sequence_no);
 
         // First packet's header includes a two-byte length
-        let header_len;
-        if sequence_no == 0 {
+        let header_len = if sequence_no == 0 {
             BigEndian::write_u16(&mut data_frame[5..7], data.len() as u16);
-            header_len = 7;
+            7
         } else {
-            header_len = 5;
-        }
+            5
+        };
         let packet_len = data_frame.len() - header_len;
 
         if data.len() > packet_len {
@@ -147,8 +146,8 @@ fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error>
         // Extract the message
         let header_len;
         if sequence_no == 0 {
-            receive_len = BigEndian::read_u16(&data_frame[5..7]) as usize;
-            ret = Vec::with_capacity(receive_len as usize);
+            receive_len = BigEndian::read_u16(&data_frame[5..7]).into();
+            ret = Vec::with_capacity(receive_len);
             header_len = 7;
         } else {
             header_len = 5;

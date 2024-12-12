@@ -46,7 +46,7 @@ impl Eq for Txo {}
 impl Ord for Txo {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         // Sort first by address since that's what the user cares about
-        fn sort_key<'a>(obj: &'a Txo) -> impl Ord + 'a {
+        fn sort_key(obj: &Txo) -> impl Ord + '_ {
             (&obj.address, obj.outpoint)
         }
         sort_key(self).cmp(&sort_key(other))

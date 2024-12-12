@@ -64,6 +64,6 @@ impl super::Command for Init {
             .write(fh, key, nonce)
             .with_context(|| format!("writing blank wallet {}", wallet_name))?;
         println!("Initialized wallet at {}.", wallet_name);
-        return Ok(());
+        Ok(())
     }
 }

@@ -34,7 +34,6 @@ use miniscript::bitcoin::{
     util::bip32,
 };
 use serde::de::DeserializeOwned;
-use serde_json;
 use std::{borrow::Cow, env, fs, path::Path};
 
 pub trait Command {
@@ -110,7 +109,7 @@ macro_rules! register_commands {
 register_commands! {
     getnewaddress, GetNewAddress, "{ \"descriptor\": int, \"index\": int }";
     init, Init, "{ \"force\": bool }";
-    info, Info, "{ \"descriptors\": [int], \"txos\": [outpoint] }";
+    info, Info, "";
     listunspent, ListUnspent, "";
     importdescriptor, ImportDescriptor, "{ \"desc\": string, \"range_low\": int, \"range_high\": int }";
     importicboc, ImportIcboc, "{ \"file\": string }";
@@ -167,7 +166,7 @@ fn open_wallet<D: Dongle, P: AsRef<Path>>(
         wallet.n_txos(),
         wallet.n_addresses(),
     );
-    println!("");
+    println!();
     Ok(wallet)
 }
 

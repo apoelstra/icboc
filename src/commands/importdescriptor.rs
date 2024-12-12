@@ -82,8 +82,8 @@ impl super::Command for ImportDescriptor {
         );
 
         super::save_wallet(&wallet, wallet_path, key, nonce)
-            .with_context(|| format!("saving wallet after import"))?;
+            .with_context(|| "saving wallet after import")?;
 
-        return Ok(());
+        Ok(())
     }
 }

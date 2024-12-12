@@ -26,7 +26,7 @@ repository.** All development here is now ICBOC 3D.
 
 ## MSRV
 
-The minimum supported Rust version of this crate is **1.48**.
+The minimum supported Rust version of this crate is **1.63.0**.
 
 ## Usage
 

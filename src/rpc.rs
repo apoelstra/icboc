@@ -1,5 +1,4 @@
 use anyhow::{self, Context};
-use home;
 use jsonrpc::{self, arg};
 use miniscript::bitcoin;
 use miniscript::bitcoin::hashes::{hex, sha256d};
@@ -52,7 +51,7 @@ impl Bitcoind {
             .with_context(|| format!("getting hex of block {} ({})", index, hash))?;
         let bytes: Vec<u8> = hex::FromHex::from_hex(&hex)
             .with_context(|| format!("deserializing hex of block {} ({})", index, hash))?;
-        Ok(bitcoin::consensus::deserialize(&bytes)
-            .with_context(|| format!("decoding block {} ({})", index, hash))?)
+        bitcoin::consensus::deserialize(&bytes)
+            .with_context(|| format!("decoding block {} ({})", index, hash))
     }
 }

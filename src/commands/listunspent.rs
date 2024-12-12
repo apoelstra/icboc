@@ -59,8 +59,8 @@ impl super::Command for ListUnspent {
             }
         }
         println!("Total balance: {}", bitcoin::Amount::from_sat(full_balance));
-        println!("");
+        println!();
 
-        return Ok(());
+        Ok(())
     }
 }

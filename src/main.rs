@@ -21,6 +21,8 @@
 //! unsafe usage (e.g. address reuse), and more TBD.
 //!
 
+#![allow(clippy::mutable_key_type)] // has false positives, has false negatives, 100% wrong IME
+
 use anyhow::Context;
 use icboc::Dongle;
 
