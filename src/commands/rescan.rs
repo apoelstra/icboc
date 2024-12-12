@@ -116,6 +116,6 @@ impl super::Command for Rescan {
         super::save_wallet(&wallet, &wallet_path, key, nonce)
             .with_context(|| format!("saving wallet at height {}", height))?;
 
-        return Ok(());
+        Ok(())
     }
 }

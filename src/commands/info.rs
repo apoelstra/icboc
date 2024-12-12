@@ -59,7 +59,7 @@ impl super::Command for Info {
                 println!("       Range: {}-{}", desc.low, desc.high - 1);
                 println!("       TXOs: {} total, {} spent", txos.len(), n_spent);
                 println!("       Balance: {}", bitcoin::Amount::from_sat(balance));
-                println!("");
+                println!();
                 full_balance += balance;
             }
         }
@@ -69,15 +69,15 @@ impl super::Command for Info {
             for addr in &addresses {
                 println!("{}", addr);
             }
-            println!("");
+            println!();
         }
         println!("Last rescan to: {}.", wallet.block_height());
         println!(
             "Wallet balance: {}",
             bitcoin::Amount::from_sat(full_balance)
         );
-        println!("");
+        println!();
 
-        return Ok(());
+        Ok(())
     }
 }

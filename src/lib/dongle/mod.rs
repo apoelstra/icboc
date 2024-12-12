@@ -194,7 +194,7 @@ pub trait Dongle {
             });
         }
 
-        if rev != &[0, 0] {
+        if rev != [0, 0] {
             panic!("Ledger requested user authentication but we don't know how to handle that");
         }
 

@@ -65,7 +65,7 @@ impl KeyCache {
         Default::default()
     }
 
-    ///
+    /// Looks up a descriptor public key in the cache.
     fn lookup_descriptor_pubkey(
         &self,
         d: &miniscript::DefiniteDescriptorKey,
@@ -86,10 +86,7 @@ impl KeyCache {
         xpub: bip32::ExtendedPubKey,
         path: &bip32::DerivationPath,
     ) -> Option<secp256k1::PublicKey> {
-        self.map
-            .get(&xpub)
-            .and_then(|map| map.get(path))
-            .map(|key| *key)
+        self.map.get(&xpub).and_then(|map| map.get(path)).copied()
     }
 
     /// Adds a key to the map
@@ -99,10 +96,7 @@ impl KeyCache {
         path: bip32::DerivationPath,
         key: secp256k1::PublicKey,
     ) {
-        self.map
-            .entry(xpub)
-            .or_insert(HashMap::new())
-            .insert(path, key);
+        self.map.entry(xpub).or_default().insert(path, key);
     }
 }
 

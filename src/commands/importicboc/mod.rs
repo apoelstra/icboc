@@ -135,7 +135,7 @@ impl super::Command for ImportIcboc {
                 .chain_code;
             let decrypted_entry = self::aes::aes256_decrypt_ctr(encryption_key, iv, entry);
 
-            if decrypted_entry != &[0; DECRYPTED_ENTRY_SIZE] {
+            if decrypted_entry != [0; DECRYPTED_ENTRY_SIZE] {
                 let time = String::from_utf8(decrypted_entry[164..188].to_owned())
                     .with_context(|| format!("decoding timestamp from entry {}", i))?;
                 let notes = {
@@ -158,9 +158,9 @@ impl super::Command for ImportIcboc {
 
         // 3. Save out
         super::save_wallet(&wallet, wallet_path, key, nonce)
-            .with_context(|| format!("saving wallet after import"))?;
+            .with_context(|| "saving wallet after import")?;
 
         println!("Imported entries from wallet. You should now run `rescan`.");
-        return Ok(());
+        Ok(())
     }
 }

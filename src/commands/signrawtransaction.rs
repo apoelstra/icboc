@@ -134,7 +134,7 @@ impl super::Command for SignRawTransaction {
         );
         println!("If you intend to broadcast this transaction you should likely run the 'receive' command with it.");
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -180,6 +180,6 @@ impl<D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'_, '_, '_
                 e
             })
             .ok()
-            .map(|sig| ecdsa::EcdsaSig::sighash_all(sig))
+            .map(ecdsa::EcdsaSig::sighash_all)
     }
 }

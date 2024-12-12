@@ -151,14 +151,10 @@ impl Wallet {
                     outpoint: enc_txo.outpoint,
                     value: enc_txo.value,
                     height: enc_txo.height,
-                    spent_data: if let Some(txid) = enc_txo.spent {
-                        Some(SpentData {
-                            txid,
-                            height: enc_txo.spent_height,
-                        })
-                    } else {
-                        None
-                    },
+                    spent_data: enc_txo.spent.map(|txid| SpentData {
+                        txid,
+                        height: enc_txo.spent_height,
+                    }),
                 },
             );
         }
@@ -244,8 +240,8 @@ impl Wallet {
     pub fn addresses(&self) -> impl Iterator<Item = Arc<Address>> + '_ {
         self.spk_address
             .values()
-            .cloned()
             .filter(|addr| addr.user_data.lock().unwrap().is_some())
+            .cloned()
     }
 
     /// Iterator over all TXOs tracked by the wallet
@@ -389,7 +385,7 @@ impl Wallet {
     pub fn txo(&self, outpoint: bitcoin::OutPoint) -> Result<&Txo, Error> {
         match self.txos.get(&outpoint) {
             Some(txo) => Ok(txo),
-            None => return Err(Error::TxoNotFound(outpoint)),
+            None => Err(Error::TxoNotFound(outpoint)),
         }
     }
 
@@ -397,7 +393,7 @@ impl Wallet {
     pub fn tx(&self, txid: bitcoin::Txid) -> Result<&bitcoin::Transaction, Error> {
         match self.tx_cache.get(&txid) {
             Some(txo) => Ok(txo),
-            None => return Err(Error::TxNotFound(txid)),
+            None => Err(Error::TxNotFound(txid)),
         }
     }
 

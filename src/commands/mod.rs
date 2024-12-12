@@ -34,7 +34,6 @@ use miniscript::bitcoin::{
     util::bip32,
 };
 use serde::de::DeserializeOwned;
-use serde_json;
 use std::{borrow::Cow, env, fs, path::Path};
 
 pub trait Command {
@@ -167,7 +166,7 @@ fn open_wallet<D: Dongle, P: AsRef<Path>>(
         wallet.n_txos(),
         wallet.n_addresses(),
     );
-    println!("");
+    println!();
     Ok(wallet)
 }
 

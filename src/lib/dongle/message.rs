@@ -707,7 +707,7 @@ impl<'a> UntrustedHashSign<'a> {
             sent: false,
             reply: vec![],
             sw: 0,
-            bip32_path: &bip32_path.as_ref(),
+            bip32_path: bip32_path.as_ref(),
             sighash,
             tx_locktime,
         }

@@ -61,6 +61,6 @@ impl super::Command for Receive {
         super::save_wallet(&wallet, &wallet_path, key, nonce)
             .with_context(|| format!("saving wallet at after receive of {}", tx.txid()))?;
 
-        return Ok(());
+        Ok(())
     }
 }

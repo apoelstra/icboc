@@ -233,7 +233,7 @@ impl Serialize for bip32::ExtendedPubKey {
 impl Serialize for bip32::DerivationPath {
     fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
         // We could avoid this allocation if we were less lazy..
-        let sl: &[bip32::ChildNumber] = &self.as_ref();
+        let sl: &[bip32::ChildNumber] = self.as_ref();
         let vec: Vec<u32> = sl.iter().cloned().map(From::from).collect();
         vec.write_to(w)
     }
