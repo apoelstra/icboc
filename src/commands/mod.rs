@@ -138,6 +138,7 @@ pub const KEYSIG_PATH: [bip32::ChildNumber; 2] = [
 
 /// Utility function to query the dongle for its encryption key and a fresh uniformly random nonce
 fn get_wallet_key_and_nonce<D: Dongle>(dongle: &mut D) -> anyhow::Result<([u8; 32], [u8; 12])> {
+    println!("Unlock wallet by signing fixed message 0000990F48F5D865…0000000000000000 (Bitcoin block 332802).");
     let sig = dongle
         .sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)
         .context("getting encryption key-signature from device")?;
