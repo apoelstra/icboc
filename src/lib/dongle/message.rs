@@ -187,7 +187,7 @@ impl<'a> GetWalletPublicKey<'a> {
             reply: vec![],
             sw: 0,
             bip32_path: bip32_path.as_ref(),
-            display: display,
+            display,
         }
     }
 }
@@ -295,7 +295,7 @@ impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
             reply: vec![],
             sw: 0,
             bip32_path: bip32_path.as_ref(),
-            message: message,
+            message,
         }
     }
 }
@@ -433,7 +433,7 @@ impl GetRandom {
             sent: false,
             reply: vec![],
             sw: 0,
-            count: count,
+            count,
         }
     }
 }
@@ -489,7 +489,7 @@ impl GetTrustedInput {
         GetTrustedInput {
             reply: vec![],
             sw: 0,
-            ser_tx: ser_tx,
+            ser_tx,
             vout: Some(vout),
         }
     }
@@ -559,9 +559,9 @@ impl UntrustedHashTransactionInputStart {
             super::tx::encode_input(tx, index, trusted_inputs, ledger::MAX_APDU_SIZE);
         ser_inputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputStart {
-            ser_inputs: ser_inputs,
+            ser_inputs,
             sent_first: false,
-            first_input: first_input,
+            first_input,
             sw: 0,
         }
     }
@@ -623,7 +623,7 @@ impl UntrustedHashTransactionInputFinalize {
         let mut ser_outputs = super::tx::encode_outputs(tx, ledger::MAX_APDU_SIZE);
         ser_outputs.reverse(); // Reverse the order of the cuts so we can send them by popping
         UntrustedHashTransactionInputFinalize {
-            ser_outputs: ser_outputs,
+            ser_outputs,
             change_path: change_address.and_then(wallet::Address::change_path),
             sw: 0,
         }
@@ -708,8 +708,8 @@ impl<'a> UntrustedHashSign<'a> {
             reply: vec![],
             sw: 0,
             bip32_path: &bip32_path.as_ref(),
-            sighash: sighash,
-            tx_locktime: tx_locktime,
+            sighash,
+            tx_locktime,
         }
     }
 }

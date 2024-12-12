@@ -305,10 +305,10 @@ impl Wallet {
 
         let idx = self.descriptors.len();
         let desc_arc = Arc::new(Descriptor {
-            desc: desc,
+            desc,
             wallet_idx: idx,
-            low: low,
-            high: high,
+            low,
+            high,
             next_idx: Mutex::new(0),
         });
 
@@ -363,10 +363,7 @@ impl Wallet {
             descriptor: Arc::clone(&self.descriptors[descriptor_idx]),
             index: wildcard_idx,
             instantiated_descriptor: inst,
-            user_data: Mutex::new(Some(UserData {
-                time: time,
-                notes: notes,
-            })),
+            user_data: Mutex::new(Some(UserData { time, notes })),
         });
         self.spk_address.insert(spk, new_addr.clone());
         self.descriptor_address
@@ -421,9 +418,9 @@ impl Wallet {
                     Entry::Vacant(v) => {
                         v.insert(Txo {
                             address: addr.clone(),
-                            outpoint: outpoint,
+                            outpoint,
                             value: output.value,
-                            height: height,
+                            height,
                             spent_data: None,
                         });
                     }
@@ -446,7 +443,7 @@ impl Wallet {
                 }
                 txo.spent_data = Some(SpentData {
                     txid: tx.txid(),
-                    height: height,
+                    height,
                 });
                 spent.insert(input.previous_output);
             }

@@ -107,7 +107,7 @@ impl super::Command for SignRawTransaction {
             prev_tx: &unsigned_tx,
             dongle: RefCell::new(dongle),
             change_address: change,
-            trusted_inputs: trusted_inputs,
+            trusted_inputs,
         };
         for (n, input) in tx.input.iter_mut().enumerate() {
             satisfier.input_idx = n;

@@ -114,8 +114,8 @@ impl<R: Read + Seek> CryptReader<R> {
         // Seek back to start to allow normal reading
         r.seek(io::SeekFrom::Start(16))?;
         Ok(CryptReader {
-            key: key,
-            nonce: nonce,
+            key,
+            nonce,
             read_len: 0,
             reader: r,
         })
@@ -158,8 +158,8 @@ impl<W: io::Write> CryptWriter<W> {
     /// Constructs a new encrypted writer
     pub fn new(key: [u8; 32], nonce: [u8; 12], w: W) -> Self {
         CryptWriter {
-            key: key,
-            nonce: nonce,
+            key,
+            nonce,
             written_len: 0,
             writer: w,
             hmac_eng: HmacEngine::new(&key),
