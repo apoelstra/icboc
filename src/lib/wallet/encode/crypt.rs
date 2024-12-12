@@ -189,15 +189,15 @@ impl<W: io::Write> CryptWriter<W> {
 
         // First pad out til we can work with whole chacha blocks
         while self.written_len % CHACHA_SLICE_LEN != 0 {
-            self.write(&[0])?;
+            self.write_all(&[0])?;
         }
 
         // Pad out with chacha blocks of encrypted 0s
         let zeroes = [0; CHACHA_SLICE_LEN];
         while (self.written_len + CHACHA_SLICE_LEN) % WALLET_ROUND_SIZE != 0 {
-            self.write(&zeroes[..])?;
+            self.write_all(&zeroes[..])?;
         }
-        self.write(&zeroes[..CHACHA_SLICE_LEN - 32])?;
+        self.write_all(&zeroes[..CHACHA_SLICE_LEN - 32])?;
 
         // Write out the hmac
         let hmac = Hmac::<sha256::Hash>::from_engine(self.hmac_eng);
@@ -208,30 +208,26 @@ impl<W: io::Write> CryptWriter<W> {
 
 impl<W: io::Write> io::Write for CryptWriter<W> {
     /// Puts some wallet data into the encrypted writer
-    fn write(&mut self, mut data: &[u8]) -> io::Result<usize> {
-        let total_len = data.len();
-        while !data.is_empty() {
-            let enc_written = self.written_len - 16;
-            let chacha_idx = (enc_written / CHACHA_SLICE_LEN) as u32;
-            let chacha_slice_idx = enc_written % CHACHA_SLICE_LEN;
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        let enc_written = self.written_len - 16;
+        let chacha_idx = (enc_written / CHACHA_SLICE_LEN) as u32;
+        let chacha_slice_idx = enc_written % CHACHA_SLICE_LEN;
 
-            let avail_len = CHACHA_SLICE_LEN - chacha_slice_idx;
-            let write_len = cmp::min(data.len(), avail_len);
+        let avail_len = CHACHA_SLICE_LEN - chacha_slice_idx;
+        let write_len = cmp::min(data.len(), avail_len);
 
-            let mut chacha = chacha20::chacha20(self.key, chacha_idx, self.nonce);
-            for i in 0..write_len {
-                chacha[i + chacha_slice_idx] ^= data[i];
-            }
-            let written_len = self
-                .writer
-                .write(&chacha[chacha_slice_idx..chacha_slice_idx + write_len])?;
-            self.hmac_eng
-                .input(&chacha[chacha_slice_idx..chacha_slice_idx + written_len]);
-
-            self.written_len += written_len;
-            data = &data[written_len..];
+        let mut chacha = chacha20::chacha20(self.key, chacha_idx, self.nonce);
+        for i in 0..write_len {
+            chacha[i + chacha_slice_idx] ^= data[i];
         }
-        Ok(total_len)
+        let written_len = self
+            .writer
+            .write(&chacha[chacha_slice_idx..chacha_slice_idx + write_len])?;
+        self.hmac_eng
+            .input(&chacha[chacha_slice_idx..chacha_slice_idx + written_len]);
+
+        self.written_len += written_len;
+        Ok(written_len)
     }
 
     /// Flushes the underlying writer
@@ -288,7 +284,7 @@ mod tests {
 
         let mut writer = CryptWriter::new(key, nonce, vec![]);
         writer.init().expect("init succeed");
-        writer.write(&DATA[..]).expect("writing succeed");
+        writer.write_all(&DATA[..]).expect("writing succeed");
         let mut vec = writer.finalize().expect("finalize succeed");
 
         assert_eq!(vec.len(), WALLET_ROUND_SIZE);
