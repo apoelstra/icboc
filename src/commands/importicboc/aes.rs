@@ -148,7 +148,7 @@ impl State {
 
     /// S-box implementation based on the gate logic from:
     ///     Joan Boyar and Rene Peralta, A depth-16 circuit for the AES S-box.
-    ///     https://eprint.iacr.org/2011/332.pdf
+    ///     <https://eprint.iacr.org/2011/332.pdf>
     fn sub_bytes(&mut self, invert: bool) {
         /* Load the bit slices */
         let U0: u16 = self.slice[7];
