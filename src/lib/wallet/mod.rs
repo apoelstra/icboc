@@ -241,7 +241,7 @@ impl Wallet {
     }
 
     /// Iterator over all addresses generated in the wallet
-    pub fn addresses<'a>(&'a self) -> impl Iterator<Item = Arc<Address>> + 'a {
+    pub fn addresses(&self) -> impl Iterator<Item = Arc<Address>> + '_ {
         self.spk_address
             .values()
             .cloned()
@@ -249,7 +249,7 @@ impl Wallet {
     }
 
     /// Iterator over all TXOs tracked by the wallet
-    pub fn all_txos<'a>(&'a self) -> impl Iterator<Item = &'a Txo> {
+    pub fn all_txos(&self) -> impl Iterator<Item = &Txo> {
         self.txos.values()
     }
 
@@ -334,7 +334,7 @@ impl Wallet {
     }
 
     /// Adds a new address to the wallet.
-    pub fn add_address<'wallet>(
+    pub fn add_address(
         &mut self,
         descriptor_idx: usize,
         wildcard_idx: Option<u32>,
@@ -373,12 +373,12 @@ impl Wallet {
     }
 
     /// Iterator over all descriptors in the wallet, and their index
-    pub fn descriptors<'a>(&'a self) -> impl Iterator<Item = &'a Descriptor> {
+    pub fn descriptors(&self) -> impl Iterator<Item = &Descriptor> {
         self.descriptors.iter().map(|arc| &**arc)
     }
 
     /// Gets the set of TXOs associated with a particular descriptor
-    pub fn txos_for<'a>(&'a self, descriptor_idx: usize) -> HashSet<&'a Txo> {
+    pub fn txos_for(&self, descriptor_idx: usize) -> HashSet<&Txo> {
         self.txos
             .values()
             .filter(|txo| txo.address.descriptor.wallet_idx == descriptor_idx)
@@ -386,7 +386,7 @@ impl Wallet {
     }
 
     /// Looks up a specific TXO
-    pub fn txo<'a>(&'a self, outpoint: bitcoin::OutPoint) -> Result<&'a Txo, Error> {
+    pub fn txo(&self, outpoint: bitcoin::OutPoint) -> Result<&Txo, Error> {
         match self.txos.get(&outpoint) {
             Some(txo) => Ok(txo),
             None => return Err(Error::TxoNotFound(outpoint)),
@@ -394,7 +394,7 @@ impl Wallet {
     }
 
     /// Looks up a cached transaction
-    pub fn tx<'a>(&'a self, txid: bitcoin::Txid) -> Result<&'a bitcoin::Transaction, Error> {
+    pub fn tx(&self, txid: bitcoin::Txid) -> Result<&bitcoin::Transaction, Error> {
         match self.tx_cache.get(&txid) {
             Some(txo) => Ok(txo),
             None => return Err(Error::TxNotFound(txid)),
@@ -521,9 +521,8 @@ pub struct KeyCachingTranslator<'dongle, 'keycache, D: Dongle> {
     pub index: u32,
 }
 
-impl<'dongle, 'keycache, D: Dongle>
-    miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Error>
-    for KeyCachingTranslator<'dongle, 'keycache, D>
+impl<D: Dongle> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Error>
+    for KeyCachingTranslator<'_, '_, D>
 {
     miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Error);
 
@@ -547,8 +546,8 @@ pub struct CachedKeyTranslator<'keycache> {
     pub index: u32,
 }
 
-impl<'keycache> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallible>
-    for CachedKeyTranslator<'keycache>
+impl miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallible>
+    for CachedKeyTranslator<'_>
 {
     miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Infallible);
 

@@ -192,7 +192,7 @@ impl<'a> GetWalletPublicKey<'a> {
     }
 }
 
-impl<'a> Command for GetWalletPublicKey<'a> {
+impl Command for GetWalletPublicKey<'_> {
     fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;
@@ -300,7 +300,7 @@ impl<'path, 'msg> SignMessagePrepare<'path, 'msg> {
     }
 }
 
-impl<'path, 'msg> Command for SignMessagePrepare<'path, 'msg> {
+impl Command for SignMessagePrepare<'_, '_> {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent_length > self.message.len() {
             unreachable!(); // sanity check
@@ -714,7 +714,7 @@ impl<'a> UntrustedHashSign<'a> {
     }
 }
 
-impl<'a> Command for UntrustedHashSign<'a> {
+impl Command for UntrustedHashSign<'_> {
     fn encode_next(&mut self, _apdu_size: usize) -> Option<Vec<u8>> {
         if self.sent {
             return None;

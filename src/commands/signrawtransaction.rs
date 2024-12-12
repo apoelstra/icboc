@@ -147,7 +147,7 @@ struct Satisfier<'tx, 'd, 'c, D> {
     trusted_inputs: Vec<icboc::TrustedInput>,
 }
 
-impl<'tx, 'd, 'c, D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'tx, 'd, 'c, D> {
+impl<D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'_, '_, '_, D> {
     fn lookup_ecdsa_sig(&self, pk: &icboc::CachedKey) -> Option<ecdsa::EcdsaSig> {
         let mut dongle = self.dongle.borrow_mut();
         dongle
