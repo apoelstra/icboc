@@ -131,8 +131,7 @@ mod tests {
 
     #[test]
     fn apdu_instruction_round_trip() {
-        for byte in 0..256 {
-            let byte = byte as u8;
+        for byte in 0..=255u8 {
             if let Some(ins) = apdu::ledger::Instruction::from_u8(byte) {
                 assert_eq!(byte, ins.into_u8());
             }

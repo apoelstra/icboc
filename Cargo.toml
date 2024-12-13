@@ -32,8 +32,6 @@ time = "0.1"
 needless_question_mark = "allow" # https://github.com/rust-bitcoin/rust-bitcoin/pull/2134
 manual_range_contains = "allow" # More readable than clippy's format.
 cast_possible_truncation = "allow" # All casts should include a code comment (except test code).
-cast_possible_wrap = "allow" # Same as above re code comment.
-cast_sign_loss = "allow" # All casts should include a code comment (except in test code).
 float_cmp = "allow" # Bitcoin floats are typically limited to 8 decimal places and we want them exact.
 match_bool = "allow" # Adds extra indentation and LOC.
 match_same_arms = "allow" # Collapses things that are conceptually unrelated to each other.
@@ -43,14 +41,17 @@ missing_panics_doc = "allow" # TODO: Still needs considering.
 must_use_candidate = "allow" # Useful for audit but many false positives.
 similar_names = "allow" # Too many (subjectively) false positives.
 uninlined_format_args = "allow" # This is a subjective style choice.
+
 # Exhaustive list of pedantic clippy lints
 assigning_clones = "warn"
 bool_to_int_with_if = "warn"
 borrow_as_ptr = "warn"
 case_sensitive_file_extension_comparisons = "warn"
 cast_lossless = "warn"
+cast_possible_wrap = "warn"
 cast_precision_loss = "warn"
 cast_ptr_alignment = "warn"
+cast_sign_loss = "warn"
 checked_conversions = "warn"
 #cloned_instead_of_copied = "warn"
 copy_iterator = "warn"
