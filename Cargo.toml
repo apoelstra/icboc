@@ -1,8 +1,13 @@
 [package]
 name = "icboc"
 version = "3.0.0"
+description = "Simple UTXO-oriented wallet designed to talk to the Ledger Nano S over USB"
+repository = "https://github.com/apoelstra/icboc"
 authors = ["Andrew Poelstra <icboc3d@wpsoftware.net>"]
+categories = ["cryptography::cryptocurrencies"]
+keywords = [ "bitcoin", "bitcoin-wallet" ]
 edition = "2018"
+license = "CC0"
 
 [lib]
 path = "src/lib/lib.rs"
@@ -47,6 +52,7 @@ assigning_clones = "warn"
 as_underscore = "warn"
 bool_to_int_with_if = "warn"
 borrow_as_ptr = "warn"
+cargo_common_metadata = "warn"
 case_sensitive_file_extension_comparisons = "warn"
 cast_lossless = "warn"
 cast_possible_wrap = "warn"
