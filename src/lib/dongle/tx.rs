@@ -58,11 +58,7 @@ pub fn encode<T: Encodable>(
     obj.consensus_encode(&mut current_piece).unwrap();
     // If this put us over the limit, split it further
     if current_piece.len() > piece_len {
-        pieces.extend(
-            current_piece
-                .chunks(piece_len)
-                .map(|slice| slice.to_owned()),
-        );
+        pieces.extend(current_piece.chunks(piece_len).map(<[u8]>::to_owned));
         current_piece = pieces.pop().unwrap();
     }
     // Return final fragment

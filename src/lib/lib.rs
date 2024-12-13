@@ -61,7 +61,7 @@ pub struct KeyCache {
 impl KeyCache {
     /// Construct a new empty key cache
     fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     /// Looks up a descriptor public key in the cache.

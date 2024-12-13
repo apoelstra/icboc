@@ -90,9 +90,8 @@ impl<R: Read + Seek> CryptReader<R> {
             let n_read = r.read(&mut buf[..to_read as usize])?;
             if n_read == 0 {
                 break;
-            } else {
-                hmac_eng.input(&buf[0..n_read]);
             }
+            hmac_eng.input(&buf[0..n_read]);
             total_read += n_read as u64;
         }
         assert_eq!(total_read, wallet_len - 32);

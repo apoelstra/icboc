@@ -200,7 +200,7 @@ impl Wallet {
                     value: txo.value,
                     height: txo.height,
                     spent: txo.spent_data.as_ref().map(|data| data.txid),
-                    spent_height: txo.spent_data.as_ref().map(|data| data.height).unwrap_or(0),
+                    spent_height: txo.spent_data.as_ref().map_or(0, |data| data.height),
                 })
                 .collect(),
             key_cache: self.key_cache.clone(),

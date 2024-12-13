@@ -24,6 +24,7 @@ mod serialize;
 use crate::KeyCache;
 use miniscript::bitcoin;
 use miniscript::bitcoin::hashes::Hash;
+use std::collections::HashMap;
 use std::io::{self, Read, Seek, Write};
 
 use self::serialize::{Serialize, MAX_VEC_ELEMS};
@@ -197,7 +198,7 @@ impl Serialize for EncTxo {
 
 impl Serialize for KeyCache {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        let len32 = self.map.values().map(|map| map.len()).sum::<usize>() as u32;
+        let len32 = self.map.values().map(HashMap::len).sum::<usize>() as u32;
         if len32 > MAX_VEC_ELEMS {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -211,8 +212,8 @@ impl Serialize for KeyCache {
         }
 
         len32.write_to(&mut w)?;
-        for (xpub, map) in self.map.iter() {
-            for (path, key) in map.iter() {
+        for (xpub, map) in &self.map {
+            for (path, key) in map {
                 xpub.write_to(&mut w)?;
                 path.write_to(&mut w)?;
                 w.write_all(&key.serialize())?;

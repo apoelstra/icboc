@@ -170,7 +170,7 @@ pub trait Dongle {
         let master_xpub = bip32::ExtendedPubKey {
             network: bitcoin::Network::Bitcoin,
             depth: 0,
-            parent_fingerprint: Default::default(),
+            parent_fingerprint: bip32::Fingerprint::default(),
             child_number: bip32::ChildNumber::Normal { index: 0 },
             public_key: master_wpk.public_key,
             chain_code: master_wpk.chain_code[..].into(),
@@ -194,9 +194,11 @@ pub trait Dongle {
             });
         }
 
-        if rev != [0, 0] {
-            panic!("Ledger requested user authentication but we don't know how to handle that");
-        }
+        assert_eq!(
+            rev,
+            [0, 0],
+            "Ledger requested user authentication but we don't know how to handle that",
+        );
 
         let command = message::SignMessageSign::new();
         let (sw, mut rev) = self.exchange(command)?;
