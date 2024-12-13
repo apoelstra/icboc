@@ -55,8 +55,8 @@ impl<R: Read + Seek> CryptReader<R> {
         let tag = sha256::Hash::hash(b"icboc3d/wallet");
         let mut hmac_eng = HmacEngine::<sha256::Hash>::new(&key);
 
-        hmac_eng.input(&tag[..]);
-        hmac_eng.input(&tag[..]);
+        hmac_eng.input(&tag);
+        hmac_eng.input(&tag);
 
         let mut magic = [0; 4];
         r.read_exact(&mut magic)?;
@@ -172,8 +172,8 @@ impl<W: io::Write> CryptWriter<W> {
         self.writer.write_all(&MAGIC_BYTES[..])?;
         self.writer.write_all(&self.nonce[..])?;
 
-        self.hmac_eng.input(&tag[..]);
-        self.hmac_eng.input(&tag[..]);
+        self.hmac_eng.input(&tag);
+        self.hmac_eng.input(&tag);
         self.hmac_eng.input(&MAGIC_BYTES[..]);
         self.hmac_eng.input(&self.nonce[..]);
 
@@ -288,7 +288,7 @@ mod tests {
 
         assert_eq!(vec.len(), WALLET_ROUND_SIZE);
 
-        let mut reader = CryptReader::new(key, io::Cursor::new(&vec[..])).expect("check mac");
+        let mut reader = CryptReader::new(key, io::Cursor::new(&*vec)).expect("check mac");
         let mut new_vec = vec![0; vec.len() - 32 - 16]; // MAC and header are skipped when reading
         reader
             .read_exact(&mut new_vec[..50])
@@ -300,15 +300,13 @@ mod tests {
         assert_eq!(&new_vec[..DATA.len()], &DATA[..]);
         assert_eq!(
             &new_vec[DATA.len()..],
-            &vec![0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()][..]
+            &*vec![0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()],
         );
 
         // Spot check some random bytes to see if we break the MAC
         for i in 0..10 {
             vec[i * 771] ^= 55;
-            CryptReader::new(key, io::Cursor::new(&vec[..]))
-                .err()
-                .unwrap();
+            CryptReader::new(key, io::Cursor::new(&*vec)).err().unwrap();
             vec[i * 771] ^= 55;
         }
     }

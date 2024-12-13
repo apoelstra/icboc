@@ -86,7 +86,7 @@ impl Serialize for u64 {
 
 impl Serialize for miniscript::bitcoin::Txid {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        w.write_all(&self[..])
+        w.write_all(self)
     }
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
@@ -200,7 +200,7 @@ impl Serialize for String {
             ));
         }
 
-        r.read_exact(&mut ret[..])?;
+        r.read_exact(&mut ret)?;
         String::from_utf8(ret).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
@@ -305,7 +305,7 @@ impl Serialize for bitcoin::Script {
             ));
         }
 
-        r.read_exact(&mut ret[..])?;
+        r.read_exact(&mut ret)?;
         Ok(bitcoin::Script::from(ret))
     }
 }
@@ -340,7 +340,7 @@ mod tests {
 
         let mut ser = vec![];
         data.write_to(&mut ser).expect("writing");
-        let read: Vec<OutPoint> = Serialize::read_from(&ser[..]).expect("read");
+        let read: Vec<OutPoint> = Serialize::read_from(&*ser).expect("read");
         assert_eq!(data, read);
     }
 }

@@ -95,7 +95,7 @@ pub trait Dongle {
         let (sw, rev) = self.exchange(command)?;
         if sw == ledger_const::sw::OK {
             let mut res = [0; 12];
-            res.copy_from_slice(&rev[..]);
+            res.copy_from_slice(&rev);
             Ok(res)
         } else {
             Err(Error::ResponseBadStatus {
@@ -228,7 +228,7 @@ pub trait Dongle {
         if sw == ledger_const::sw::OK {
             if rev.len() == 56 {
                 let mut ret = TrustedInput::default();
-                ret.blob.copy_from_slice(&rev[..]);
+                ret.blob.copy_from_slice(&rev);
                 ret.script_pubkey = tx.output[vout as usize].script_pubkey.clone();
                 Ok(ret)
             } else {
