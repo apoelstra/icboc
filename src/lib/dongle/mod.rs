@@ -38,7 +38,7 @@ pub struct TrustedInput {
     /// Opaque blob provided by the ledger in response to the
     /// `get_trusted_input` call
     blob: [u8; 56],
-    /// ScriptPubKey of the output being spent
+    /// `ScriptPubKey` of the output being spent
     script_pubkey: bitcoin::Script,
 }
 

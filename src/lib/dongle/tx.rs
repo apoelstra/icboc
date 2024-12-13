@@ -26,7 +26,7 @@ use crate::dongle::TrustedInput;
 use miniscript::bitcoin;
 use miniscript::bitcoin::consensus::Encodable;
 
-/// Helper function to turn a usize into a VarInt for encoding
+/// Helper function to turn a usize into a [`bitcoin::VarInt`] for encoding
 fn varint(n: usize) -> bitcoin::VarInt {
     bitcoin::VarInt(n as u64)
 }

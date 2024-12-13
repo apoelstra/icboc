@@ -473,7 +473,7 @@ impl Wallet {
 pub struct CachedKey {
     /// Instantiated descriptor
     pub desc_key: miniscript::DefiniteDescriptorKey,
-    /// Cached copy of the resulting bitcoin PublicKey
+    /// Cached copy of the resulting [`secp256k1::PublicKey`]
     pub key: secp256k1::PublicKey,
 }
 

@@ -57,7 +57,7 @@ pub fn hash_sha256(input: &[u8]) -> [u8; 32] {
 ///
 /// Anyway, to parse these, the most straightforward thing is to pull the
 /// recid out of the 30/31 byte as suggested, then force the byte to 0x30
-/// and parse using from_der_lax.
+/// and parse using [`ecdsa::Signature::from_der_lax`].
 pub fn parse_ledger_signature_recoverable(
     sig: &mut [u8],
 ) -> Result<RecoverableSignature, secp256k1::Error> {

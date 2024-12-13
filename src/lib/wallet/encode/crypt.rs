@@ -14,8 +14,8 @@
 
 //! Wallet Cryter
 //!
-//! Defines a wrapper around io::Read and Write which does a simple
-//! encrypt-then-MAC scheme using chacha20 and hmac-sha256. Does not
+//! Defines a wrapper around [`io::Read`] and [`io::Write`] which does a simple
+//! encrypt-then-MAC scheme using chacha20 and HMAC-SHA256. Does not
 //! do any randomization; requires the user supply a uniformly random
 //! 32-byte key and a unique (per message and key) 12-byte nonce.
 //!
@@ -41,7 +41,7 @@ const WALLET_MAX_SIZE: usize = WALLET_ROUND_SIZE * 1024;
 /// Output size of chacha20
 const CHACHA_SLICE_LEN: usize = 64;
 
-/// Wrapper around a io::Read which reads encrypted and MAC'd data
+/// Wrapper around a [`io::Read`] which reads encrypted and MAC'd data
 pub struct CryptReader<R: Read + Seek> {
     key: [u8; 32],
     nonce: [u8; 12],
@@ -144,7 +144,7 @@ impl<R: Read + Seek> Read for CryptReader<R> {
     }
 }
 
-/// Wrapper around a io::Write which encrypt-then-MACs data
+/// Wrapper around a [`io::Write`] which encrypt-then-MACs data
 pub struct CryptWriter<W: io::Write> {
     key: [u8; 32],
     nonce: [u8; 12],
