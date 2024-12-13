@@ -115,13 +115,13 @@ impl Wallet {
                 // cache was created).
                 let inst = ret.cache_keys(&mut *dongle, &desc_arc.desc, wildcard_idx)?;
                 let new_addr = Arc::new(Address {
-                    descriptor: desc_arc.clone(),
+                    descriptor: Arc::clone(&desc_arc),
                     index: wildcard_idx,
                     instantiated_descriptor: inst,
                     user_data: Mutex::new(None),
                 });
                 ret.descriptor_address
-                    .insert((idx, wildcard_idx), new_addr.clone());
+                    .insert((idx, wildcard_idx), Arc::clone(&new_addr));
                 ret.spk_address
                     .insert(new_addr.instantiated_descriptor.script_pubkey(), new_addr);
             }
@@ -145,9 +145,10 @@ impl Wallet {
             ret.txos.insert(
                 enc_txo.outpoint,
                 Txo {
-                    address: ret.descriptor_address
-                        [&(enc_txo.descriptor_idx as usize, enc_txo.wildcard_idx)]
-                        .clone(),
+                    address: Arc::clone(
+                        &ret.descriptor_address
+                            [&(enc_txo.descriptor_idx as usize, enc_txo.wildcard_idx)],
+                    ),
                     outpoint: enc_txo.outpoint,
                     value: enc_txo.value,
                     height: enc_txo.height,
@@ -314,12 +315,13 @@ impl Wallet {
                 added_new += 1;
                 let inst = self.cache_keys(&mut *dongle, &desc_arc.desc, i)?;
                 let new_addr = Arc::new(Address {
-                    descriptor: desc_arc.clone(),
+                    descriptor: Arc::clone(&desc_arc),
                     index: i,
                     instantiated_descriptor: inst,
                     user_data: Mutex::new(None),
                 });
-                self.descriptor_address.insert((idx, i), new_addr.clone());
+                self.descriptor_address
+                    .insert((idx, i), Arc::clone(&new_addr));
                 self.spk_address
                     .insert(new_addr.instantiated_descriptor.script_pubkey(), new_addr);
             }
@@ -361,9 +363,9 @@ impl Wallet {
             instantiated_descriptor: inst,
             user_data: Mutex::new(Some(UserData { time, notes })),
         });
-        self.spk_address.insert(spk, new_addr.clone());
+        self.spk_address.insert(spk, Arc::clone(&new_addr));
         self.descriptor_address
-            .insert((descriptor_idx, wildcard_idx), new_addr.clone());
+            .insert((descriptor_idx, wildcard_idx), Arc::clone(&new_addr));
 
         Ok(new_addr)
     }
@@ -413,7 +415,7 @@ impl Wallet {
                 match self.txos.entry(outpoint) {
                     Entry::Vacant(v) => {
                         v.insert(Txo {
-                            address: addr.clone(),
+                            address: Arc::clone(addr),
                             outpoint,
                             value: output.value,
                             height,
