@@ -19,9 +19,13 @@
 //!
 //!
 
+// Because we transliterated this from C there are a bunch of clippy lints
+// that apply to it. Rather than getting our hands dirty modifying crypto
+// code, just whitelist them.
 #![allow(non_snake_case)]
 #![allow(clippy::manual_rotate)]
 #![allow(clippy::needless_late_init)]
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::wrong_self_convention)]
 
 const N_ROUNDS: usize = 14;

@@ -99,6 +99,7 @@ impl Command for GetFirmwareVersion {
 
 /// Response to the GET FIRMWARE VERSION message
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct FirmwareVersion {
     /// Whether or not the device uses compressed keys
     pub compressed: bool,
