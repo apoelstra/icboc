@@ -88,7 +88,7 @@ impl Command for GetFirmwareVersion {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -219,7 +219,7 @@ impl Command for GetWalletPublicKey<'_> {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -356,7 +356,7 @@ impl Command for SignMessagePrepare<'_, '_> {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -408,7 +408,7 @@ impl Command for SignMessageSign {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -461,7 +461,7 @@ impl Command for GetRandom {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -527,7 +527,7 @@ impl Command for GetTrustedInput {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -597,7 +597,7 @@ impl Command for UntrustedHashTransactionInputStart {
         if data.len() > 2 {
             return Err(Error::Unsupported);
         }
-        self.sw = ((data[0] as u16) << 8) + data[1] as u16;
+        self.sw = (u16::from(data[0]) << 8) + u16::from(data[1]);
         Ok(())
     }
 
@@ -675,7 +675,7 @@ impl Command for UntrustedHashTransactionInputFinalize {
         }
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 
@@ -744,7 +744,7 @@ impl Command for UntrustedHashSign<'_> {
         let sw2 = data.pop().unwrap();
         let sw1 = data.pop().unwrap();
         self.reply = data;
-        self.sw = ((sw1 as u16) << 8) + sw2 as u16;
+        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
         Ok(())
     }
 

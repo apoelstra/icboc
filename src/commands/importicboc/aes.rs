@@ -52,7 +52,7 @@ impl State {
     /// Convert a byte to sliced form, storing it corresponding to given row and column
     fn load_byte(&mut self, mut byte: u8, row: usize, col: usize) {
         for i in 0..8 {
-            self.slice[i] |= ((byte as u16) & 1) << (row * 4 + col);
+            self.slice[i] |= (u16::from(byte) & 1) << (row * 4 + col);
             byte /= 2;
         }
     }

@@ -64,10 +64,10 @@ impl Serialize for u32 {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let mut dat = [0; 4];
         r.read_exact(&mut dat)?;
-        Ok((dat[0] as u32)
-            + ((dat[1] as u32) << 8)
-            + ((dat[2] as u32) << 16)
-            + ((dat[3] as u32) << 24))
+        Ok(u32::from(dat[0])
+            + (u32::from(dat[1]) << 8)
+            + (u32::from(dat[2]) << 16)
+            + (u32::from(dat[3]) << 24))
     }
 }
 
@@ -80,7 +80,7 @@ impl Serialize for u64 {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let lo: u32 = Serialize::read_from(&mut r)?;
         let hi: u32 = Serialize::read_from(r)?;
-        Ok((lo as u64) + ((hi as u64) << 32))
+        Ok((u64::from(lo)) + ((u64::from(hi)) << 32))
     }
 }
 

@@ -84,10 +84,10 @@ impl super::Command for ImportIcboc {
 
         fh.read_exact(&mut magic[0..4])
             .context("reading account number bytes")?;
-        let account_no = ((magic[0] as u32) << 24)
-            + ((magic[1] as u32) << 16)
-            + ((magic[2] as u32) << 8)
-            + magic[3] as u32;
+        let account_no = (u32::from(magic[0]) << 24)
+            + (u32::from(magic[1]) << 16)
+            + (u32::from(magic[2]) << 8)
+            + u32::from(magic[3]);
 
         println!(
             "Found ICBOC 1D wallet with {} entries. Fetching that many keys from the Ledger.",
