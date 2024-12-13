@@ -26,7 +26,6 @@
 #![warn(non_snake_case)]
 #![warn(unused_mut)]
 #![warn(missing_docs)]
-#![allow(clippy::mutable_key_type)] // has false positives, has false negatives, 100% wrong IME
 
 pub mod constants;
 mod dongle;
