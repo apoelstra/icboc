@@ -240,6 +240,7 @@ pub struct WalletPublicKey {
 }
 
 impl Response for WalletPublicKey {
+    #[allow(clippy::range_plus_one)] // false positive on 1..1 + pk_len
     fn decode(data: &[u8]) -> Result<WalletPublicKey, Error> {
         let pk_len = data[0] as usize;
         if 2 + pk_len > data.len() {
