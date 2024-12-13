@@ -300,7 +300,7 @@ mod tests {
         assert_eq!(&new_vec[..DATA.len()], &DATA[..]);
         assert_eq!(
             &new_vec[DATA.len()..],
-            &[0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()][..]
+            &vec![0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()][..]
         );
 
         // Spot check some random bytes to see if we break the MAC
