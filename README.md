@@ -62,7 +62,9 @@ You'll see that each descriptor has an index, which is used to identify it in
 the wallet. When there is only one descriptor it will have index 0. You can
 get a new address from it by running
 
-    icboc3d wallet.icboc.dat getnewaddress '{ "descriptor": 0 }'
+    icboc3d wallet.icboc.dat getnewaddress '{ "descriptor": 0, "note": "initial wallet funds" }'
+
+The `note` field can be set to any string you want.
 
 Then receive coins either by copying raw transactions and running
 

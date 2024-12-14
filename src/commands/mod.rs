@@ -107,8 +107,8 @@ macro_rules! register_commands {
 }
 
 register_commands! {
-    getnewaddress, GetNewAddress, "{ \"descriptor\": int, \"index\": int }";
-    init, Init, "{ \"force\": bool }";
+    getnewaddress, GetNewAddress, "{ \"descriptor\": int, \"note\": string, \"index\": int (optional) }";
+    init, Init, "{ \"force\": bool (optional) }";
     info, Info, "";
     listunspent, ListUnspent, "";
     importdescriptor, ImportDescriptor, "{ \"desc\": string, \"range_low\": int, \"range_high\": int }";
