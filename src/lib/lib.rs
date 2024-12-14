@@ -21,6 +21,7 @@
 //!
 
 // Coding conventions
+#![warn(non_ascii_idents)]
 #![warn(non_upper_case_globals)]
 #![warn(non_camel_case_types)]
 #![warn(non_snake_case)]

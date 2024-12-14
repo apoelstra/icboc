@@ -30,7 +30,7 @@ use super::chacha20;
 const MAGIC_BYTES: [u8; 4] = *b"IX3D";
 
 /// Wallet will be 0-padded to be a multiple of this value
-const WALLET_ROUND_SIZE: usize = 32768;
+const WALLET_ROUND_SIZE: usize = 0x8000;
 
 /// Maximum size of a wallet we're willing to read. Set to we can comfortably
 /// fit the whole wallet in RAM, and so that we can implement all of our
