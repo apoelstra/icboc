@@ -28,10 +28,13 @@ pub struct Info;
 /// Gets information
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Options {}
+pub struct Options {
+    #[serde(default)]
+    _dummy: (),
+}
 
 impl super::Command for Info {
-    type Options = ();
+    type Options = Options;
 
     fn execute<D: Dongle, P: AsRef<Path>>(
         _: Self::Options,
