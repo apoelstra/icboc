@@ -17,7 +17,7 @@
 //! Data types which can be read and written to the wallet backing store
 //!
 
-use miniscript::bitcoin::{self, secp256k1, util::bip32};
+use miniscript::bitcoin::{self, bip32, secp256k1};
 use std::io::{self, Read, Write};
 use std::str::FromStr;
 
@@ -227,7 +227,7 @@ impl Serialize for miniscript::Descriptor<miniscript::DescriptorPublicKey> {
     }
 }
 
-impl Serialize for bitcoin::Script {
+impl Serialize for bitcoin::ScriptBuf {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         let len32: u32 = self.len() as u32;
         if self.len() > MAX_SCRIPTPUBKEY_SIZE as usize {
@@ -261,7 +261,7 @@ impl Serialize for bitcoin::Script {
         }
 
         r.read_exact(&mut ret)?;
-        Ok(bitcoin::Script::from(ret))
+        Ok(bitcoin::ScriptBuf::from(ret))
     }
 }
 

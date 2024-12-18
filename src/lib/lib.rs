@@ -34,7 +34,7 @@ mod error;
 mod util;
 mod wallet;
 
-use miniscript::bitcoin::{secp256k1, util::bip32};
+use miniscript::bitcoin::{bip32, secp256k1};
 use miniscript::DescriptorPublicKey;
 use std::collections::HashMap;
 
@@ -70,13 +70,13 @@ impl KeyCache {
         &self,
         d: &miniscript::DefiniteDescriptorKey,
     ) -> Option<secp256k1::PublicKey> {
-        let d: DescriptorPublicKey = d.clone().into(); // FIXME https://github.com/rust-bitcoin/rust-miniscript/pull/492
-        match d {
+        match *d.as_descriptor_public_key() {
             DescriptorPublicKey::Single(ref single) => match single.key {
                 miniscript::descriptor::SinglePubKey::FullKey(key) => Some(key.inner),
                 miniscript::descriptor::SinglePubKey::XOnly(_) => todo!("No taproot support yet"),
             },
             DescriptorPublicKey::XPub(ref xpub) => self.lookup(xpub.xkey, &xpub.derivation_path),
+            DescriptorPublicKey::MultiXPub(..) => panic!("multi-xpubs (BIP 389) not supported"),
         }
     }
 

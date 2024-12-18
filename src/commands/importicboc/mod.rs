@@ -21,7 +21,7 @@ mod aes;
 
 use anyhow::{self, Context};
 use icboc::Dongle;
-use miniscript::bitcoin::util::bip32;
+use miniscript::bitcoin::bip32;
 use serde::Deserialize;
 use std::{
     fs,

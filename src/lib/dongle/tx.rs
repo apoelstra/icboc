@@ -110,7 +110,7 @@ pub fn encode_input(
     cur = encode(&tx.version, cur, &mut ret, piece_len);
     cur = encode(&varint(tx.input.len()), cur, &mut ret, piece_len);
     for (n, input) in tx.input.iter().enumerate() {
-        let dummy = bitcoin::Script::new();
+        let dummy = bitcoin::ScriptBuf::new();
         let spk = if n == index {
             &trusted_inputs[n].script_pubkey
         } else {

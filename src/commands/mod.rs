@@ -30,8 +30,8 @@ mod signrawtransaction;
 use anyhow::{self, Context};
 use icboc::{Dongle, Wallet};
 use miniscript::bitcoin::{
+    bip32,
     hashes::{sha256, Hash},
-    util::bip32,
 };
 use serde::de::DeserializeOwned;
 use std::{borrow::Cow, env, fs, path::Path};
@@ -141,7 +141,7 @@ fn get_wallet_key_and_nonce<D: Dongle>(dongle: &mut D) -> anyhow::Result<([u8; 3
     let sig = dongle
         .sign_message(&KEYSIG_MESSAGE, &KEYSIG_PATH)
         .context("getting encryption key-signature from device")?;
-    let wallet_key = sha256::Hash::hash(&sig.serialize_compact()).into_inner();
+    let wallet_key = sha256::Hash::hash(&sig.serialize_compact()).to_byte_array();
     let wallet_nonce = dongle
         .get_random_nonce()
         .context("getting random encryption IV from device")?;

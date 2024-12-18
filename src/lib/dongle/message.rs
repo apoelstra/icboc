@@ -20,7 +20,7 @@
 
 use byteorder::{BigEndian, WriteBytesExt};
 use miniscript::bitcoin;
-use miniscript::bitcoin::util::bip32;
+use miniscript::bitcoin::bip32;
 use std::cmp;
 
 use crate::constants::apdu::ledger::{self, Instruction};
@@ -694,7 +694,7 @@ pub struct UntrustedHashSign<'a> {
     reply: Vec<u8>,
     sw: u16,
     bip32_path: &'a [bip32::ChildNumber],
-    sighash: bitcoin::EcdsaSighashType,
+    sighash: bitcoin::sighash::EcdsaSighashType,
     tx_locktime: u32,
 }
 
@@ -702,7 +702,7 @@ impl<'a> UntrustedHashSign<'a> {
     /// Constructor
     pub fn new<P: AsRef<[bip32::ChildNumber]>>(
         bip32_path: &'a P,
-        sighash: bitcoin::EcdsaSighashType,
+        sighash: bitcoin::sighash::EcdsaSighashType,
         tx_locktime: u32,
     ) -> Self {
         UntrustedHashSign {
