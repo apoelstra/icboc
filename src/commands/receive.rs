@@ -49,7 +49,7 @@ impl super::Command for Receive {
         let tx: bitcoin::Transaction =
             consensus::deserialize(&rawtx).context("decoding raw transaction")?;
 
-        println!("Scanning tx {}", tx.txid());
+        println!("Scanning tx {}", tx.compute_txid());
         let (received, spent) = wallet.scan_tx(&tx, 0);
         for txo in spent {
             println!("spent {}", txo);
@@ -59,7 +59,7 @@ impl super::Command for Receive {
         }
 
         super::save_wallet(&wallet, &wallet_path, key, nonce)
-            .with_context(|| format!("saving wallet at after receive of {}", tx.txid()))?;
+            .with_context(|| format!("saving wallet at after receive of {}", tx.compute_txid()))?;
 
         Ok(())
     }

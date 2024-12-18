@@ -87,7 +87,7 @@ impl Wallet {
             tx_cache: enc_wallet
                 .tx_cache
                 .into_iter()
-                .map(|tx| (tx.txid(), tx))
+                .map(|tx| (tx.compute_txid(), tx))
                 .collect(),
         };
         // Copy descriptors into arcs
@@ -412,7 +412,7 @@ impl Wallet {
 
         for (vout, output) in tx.output.iter().enumerate() {
             if let Some(addr) = self.spk_address.get(&output.script_pubkey) {
-                let outpoint = bitcoin::OutPoint::new(tx.txid(), vout as u32);
+                let outpoint = bitcoin::OutPoint::new(tx.compute_txid(), vout as u32);
                 match self.txos.entry(outpoint) {
                     Entry::Vacant(v) => {
                         v.insert(Txo {
@@ -425,7 +425,7 @@ impl Wallet {
                     }
                     Entry::Occupied(mut o) => o.get_mut().height = height,
                 }
-                self.tx_cache.insert(tx.txid(), tx.clone());
+                self.tx_cache.insert(tx.compute_txid(), tx.clone());
                 received.insert(outpoint);
             }
         }
@@ -436,12 +436,12 @@ impl Wallet {
                     println!(
                         "Warning: {} is double-spent by {} (original transaction {})",
                         input.previous_output,
-                        tx.txid(),
+                        tx.compute_txid(),
                         data.txid,
                     );
                 }
                 txo.spent_data = Some(SpentData {
-                    txid: tx.txid(),
+                    txid: tx.compute_txid(),
                     height,
                 });
                 spent.insert(input.previous_output);
