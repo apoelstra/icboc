@@ -21,12 +21,12 @@
 //!
 
 // Coding conventions
+#![warn(non_ascii_idents)]
 #![warn(non_upper_case_globals)]
 #![warn(non_camel_case_types)]
 #![warn(non_snake_case)]
 #![warn(unused_mut)]
 #![warn(missing_docs)]
-#![allow(clippy::mutable_key_type)] // has false positives, has false negatives, 100% wrong IME
 
 pub mod constants;
 mod dongle;
@@ -62,7 +62,7 @@ pub struct KeyCache {
 impl KeyCache {
     /// Construct a new empty key cache
     fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     /// Looks up a descriptor public key in the cache.

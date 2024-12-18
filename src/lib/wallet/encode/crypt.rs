@@ -14,8 +14,8 @@
 
 //! Wallet Cryter
 //!
-//! Defines a wrapper around io::Read and Write which does a simple
-//! encrypt-then-MAC scheme using chacha20 and hmac-sha256. Does not
+//! Defines a wrapper around [`io::Read`] and [`io::Write`] which does a simple
+//! encrypt-then-MAC scheme using chacha20 and HMAC-SHA256. Does not
 //! do any randomization; requires the user supply a uniformly random
 //! 32-byte key and a unique (per message and key) 12-byte nonce.
 //!
@@ -30,7 +30,7 @@ use super::chacha20;
 const MAGIC_BYTES: [u8; 4] = *b"IX3D";
 
 /// Wallet will be 0-padded to be a multiple of this value
-const WALLET_ROUND_SIZE: usize = 32768;
+const WALLET_ROUND_SIZE: usize = 0x8000;
 
 /// Maximum size of a wallet we're willing to read. Set to we can comfortably
 /// fit the whole wallet in RAM, and so that we can implement all of our
@@ -41,7 +41,7 @@ const WALLET_MAX_SIZE: usize = WALLET_ROUND_SIZE * 1024;
 /// Output size of chacha20
 const CHACHA_SLICE_LEN: usize = 64;
 
-/// Wrapper around a io::Read which reads encrypted and MAC'd data
+/// Wrapper around a [`io::Read`] which reads encrypted and MAC'd data
 pub struct CryptReader<R: Read + Seek> {
     key: [u8; 32],
     nonce: [u8; 12],
@@ -55,8 +55,8 @@ impl<R: Read + Seek> CryptReader<R> {
         let tag = sha256::Hash::hash(b"icboc3d/wallet");
         let mut hmac_eng = HmacEngine::<sha256::Hash>::new(&key);
 
-        hmac_eng.input(&tag[..]);
-        hmac_eng.input(&tag[..]);
+        hmac_eng.input(&tag);
+        hmac_eng.input(&tag);
 
         let mut magic = [0; 4];
         r.read_exact(&mut magic)?;
@@ -90,9 +90,8 @@ impl<R: Read + Seek> CryptReader<R> {
             let n_read = r.read(&mut buf[..to_read as usize])?;
             if n_read == 0 {
                 break;
-            } else {
-                hmac_eng.input(&buf[0..n_read]);
             }
+            hmac_eng.input(&buf[0..n_read]);
             total_read += n_read as u64;
         }
         assert_eq!(total_read, wallet_len - 32);
@@ -145,7 +144,7 @@ impl<R: Read + Seek> Read for CryptReader<R> {
     }
 }
 
-/// Wrapper around a io::Write which encrypt-then-MACs data
+/// Wrapper around a [`io::Write`] which encrypt-then-MACs data
 pub struct CryptWriter<W: io::Write> {
     key: [u8; 32],
     nonce: [u8; 12],
@@ -173,8 +172,8 @@ impl<W: io::Write> CryptWriter<W> {
         self.writer.write_all(&MAGIC_BYTES[..])?;
         self.writer.write_all(&self.nonce[..])?;
 
-        self.hmac_eng.input(&tag[..]);
-        self.hmac_eng.input(&tag[..]);
+        self.hmac_eng.input(&tag);
+        self.hmac_eng.input(&tag);
         self.hmac_eng.input(&MAGIC_BYTES[..]);
         self.hmac_eng.input(&self.nonce[..]);
 
@@ -289,7 +288,7 @@ mod tests {
 
         assert_eq!(vec.len(), WALLET_ROUND_SIZE);
 
-        let mut reader = CryptReader::new(key, io::Cursor::new(&vec[..])).expect("check mac");
+        let mut reader = CryptReader::new(key, io::Cursor::new(&*vec)).expect("check mac");
         let mut new_vec = vec![0; vec.len() - 32 - 16]; // MAC and header are skipped when reading
         reader
             .read_exact(&mut new_vec[..50])
@@ -301,15 +300,13 @@ mod tests {
         assert_eq!(&new_vec[..DATA.len()], &DATA[..]);
         assert_eq!(
             &new_vec[DATA.len()..],
-            &[0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()][..]
+            &*vec![0; WALLET_ROUND_SIZE - 32 - 16 - DATA.len()],
         );
 
         // Spot check some random bytes to see if we break the MAC
         for i in 0..10 {
             vec[i * 771] ^= 55;
-            CryptReader::new(key, io::Cursor::new(&vec[..]))
-                .err()
-                .unwrap();
+            CryptReader::new(key, io::Cursor::new(&*vec)).err().unwrap();
             vec[i * 771] ^= 55;
         }
     }

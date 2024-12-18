@@ -49,30 +49,30 @@ impl super::Command for ImportDescriptor {
         let mut wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
         let range = match (options.range_low, options.range_high) {
-            (None, None) => 0..101,
-            (Some(lo), None) => lo..101,
-            (Some(lo), Some(hi)) => lo..hi + 1,
-            (None, Some(hi)) => 0..hi + 1,
+            (None, None) => 0..=100,
+            (Some(lo), None) => lo..=100,
+            (Some(lo), Some(hi)) => lo..=hi,
+            (None, Some(hi)) => 0..=hi,
         };
-        if range.start >= range.end {
+        if range.start() >= range.end() {
             return Err(anyhow::Error::msg(format!("invalid range {:?}", range)));
         }
 
         println!(
             "Asked to import descriptor {}. Generating addresses from {} through {}",
             options.desc,
-            range.start,
-            range.end - 1,
+            range.start(),
+            range.end(),
         );
         let n_added = wallet
-            .add_descriptor(options.desc, range.start, range.end, &mut *dongle)
+            .add_descriptor(options.desc, *range.start(), *range.end(), &mut *dongle)
             .with_context(|| "importing descriptor")?;
 
         if n_added == 0 {
             println!(
                 "Wallet already has all keys from {} through {}.",
-                range.start,
-                range.end - 1
+                range.start(),
+                range.end()
             );
             return Err(anyhow::Error::msg("nothing to do"));
         }

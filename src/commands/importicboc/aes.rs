@@ -19,9 +19,13 @@
 //!
 //!
 
+// Because we transliterated this from C there are a bunch of clippy lints
+// that apply to it. Rather than getting our hands dirty modifying crypto
+// code, just whitelist them.
 #![allow(non_snake_case)]
 #![allow(clippy::manual_rotate)]
 #![allow(clippy::needless_late_init)]
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::wrong_self_convention)]
 
 const N_ROUNDS: usize = 14;
@@ -33,7 +37,7 @@ struct State {
 }
 
 impl State {
-    /// colmun_0(ret) = column_col(self)
+    /// `colmun_0(ret) = column_col(self)`
     fn from_column(&self, col: usize) -> State {
         State {
             slice: [
@@ -52,7 +56,7 @@ impl State {
     /// Convert a byte to sliced form, storing it corresponding to given row and column
     fn load_byte(&mut self, mut byte: u8, row: usize, col: usize) {
         for i in 0..8 {
-            self.slice[i] |= ((byte as u16) & 1) << (row * 4 + col);
+            self.slice[i] |= (u16::from(byte) & 1) << (row * 4 + col);
             byte /= 2;
         }
     }
@@ -104,7 +108,7 @@ impl State {
         }
     }
 
-    /// Multiply the cells by x, as polynomials over GF(2) mod x^8 + x^4 + x^3 + x + 1
+    /// Multiply the cells by `x`, as polynomials over `GF(2)` mod `x^8 + x^4 + x^3 + x + 1`
     fn mult_x(&mut self) {
         let top = self.slice[7];
         self.slice[7] = self.slice[6];
@@ -117,14 +121,14 @@ impl State {
         self.slice[0] = top;
     }
 
-    /// Rotate the rows one positino upwards, and xor in r
+    /// Rotate the rows one position upwards, and xor in r
     fn key_setup_transform(&mut self, other: &Self) {
         for b in 0..8 {
             self.slice[b] = ((self.slice[b] >> 4) | (self.slice[b] << 12)) ^ other.slice[b];
         }
     }
 
-    /// column_c1(r) |= (column_0(self) ^= column_c2(a))
+    /// `column_c1(r) |= (column_0(self) ^= column_c2(a))`
     fn key_setup_column_mix(
         &mut self,
         other: &mut [Self],
@@ -413,18 +417,18 @@ impl State {
         }
     }
 
-    /// The MixColumns transform treats the bytes of the columns of the state as
+    /// The `MixColumns` transform treats the bytes of the columns of the state as
     /// coefficients of a 3rd degree polynomial over GF(2^8) and multiplies them
-    /// by the fixed polynomial a(x) = {03}x^3 + {01}x^2 + {01}x + {02}, modulo
-    /// x^4 + {01}.
+    /// by the fixed polynomial `a(x) = {03}x^3 + {01}x^2 + {01}x + {02}`, modulo
+    /// `x^4 + {01}`.
     ///
     /// In the inverse transform, we multiply by the inverse of a(x),
-    /// a^-1(x) = {0b}x^3 + {0d}x^2 + {09}x + {0e}. This is equal to
-    /// a(x) * ({04}x^2 + {05}), so we can reuse the forward transform's code
+    /// `a^-1(x) = {0b}x^3 + {0d}x^2 + {09}x + {0e}`. This is equal to
+    /// `a(x) * ({04}x^2 + {05})`, so we can reuse the forward transform's code
     /// (found in OpenSSL's bsaes-x86_64.pl, attributed to Jussi Kivilinna)
     ///
-    /// In the bitsliced representation, a multiplication of every column by x
-    /// mod x^4 + 1 is simply a right rotation.
+    /// In the bitsliced representation, a multiplication of every column by `x`
+    /// mod `x^4 + 1` is simply a right rotation.
     fn mix_columns(&mut self, invert: bool) {
         fn rot(x: u16, b: usize) -> u16 {
             (x >> (4 * b)) | (x << (4 * (4 - b)))

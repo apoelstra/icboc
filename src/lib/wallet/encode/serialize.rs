@@ -64,10 +64,10 @@ impl Serialize for u32 {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let mut dat = [0; 4];
         r.read_exact(&mut dat)?;
-        Ok((dat[0] as u32)
-            + ((dat[1] as u32) << 8)
-            + ((dat[2] as u32) << 16)
-            + ((dat[3] as u32) << 24))
+        Ok(u32::from(dat[0])
+            + (u32::from(dat[1]) << 8)
+            + (u32::from(dat[2]) << 16)
+            + (u32::from(dat[3]) << 24))
     }
 }
 
@@ -80,13 +80,13 @@ impl Serialize for u64 {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let lo: u32 = Serialize::read_from(&mut r)?;
         let hi: u32 = Serialize::read_from(r)?;
-        Ok((lo as u64) + ((hi as u64) << 32))
+        Ok((u64::from(lo)) + ((u64::from(hi)) << 32))
     }
 }
 
 impl Serialize for miniscript::bitcoin::Txid {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        w.write_all(&self[..])
+        w.write_all(self)
     }
 
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
@@ -200,7 +200,7 @@ impl Serialize for String {
             ));
         }
 
-        r.read_exact(&mut ret[..])?;
+        r.read_exact(&mut ret)?;
         String::from_utf8(ret).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
@@ -234,7 +234,7 @@ impl Serialize for bip32::DerivationPath {
     fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
         // We could avoid this allocation if we were less lazy..
         let sl: &[bip32::ChildNumber] = self.as_ref();
-        let vec: Vec<u32> = sl.iter().cloned().map(From::from).collect();
+        let vec: Vec<u32> = sl.iter().copied().map(From::from).collect();
         vec.write_to(w)
     }
 
@@ -305,7 +305,7 @@ impl Serialize for bitcoin::Script {
             ));
         }
 
-        r.read_exact(&mut ret[..])?;
+        r.read_exact(&mut ret)?;
         Ok(bitcoin::Script::from(ret))
     }
 }
@@ -340,7 +340,7 @@ mod tests {
 
         let mut ser = vec![];
         data.write_to(&mut ser).expect("writing");
-        let read: Vec<OutPoint> = Serialize::read_from(&ser[..]).expect("read");
+        let read: Vec<OutPoint> = Serialize::read_from(&*ser).expect("read");
         assert_eq!(data, read);
     }
 }

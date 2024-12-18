@@ -12,6 +12,8 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+#![allow(clippy::many_single_char_names)] // fine in a cipher implementation
+
 //! Chacha20 Stream Cipher
 //!
 //! This cipher is defined in RFC 8439.
@@ -42,10 +44,10 @@ pub fn chacha20(seed: [u8; 32], idx: u32, nonce: [u8; 12]) -> [u8; 64] {
     }
 
     let init_x: [u32; 16] = [
-        0x61707865,
-        0x3320646e,
-        0x79622d32,
-        0x6b206574,
+        0x6170_7865,
+        0x3320_646e,
+        0x7962_2d32,
+        0x6b20_6574,
         u32::from_le_bytes([seed[0], seed[1], seed[2], seed[3]]),
         u32::from_le_bytes([seed[4], seed[5], seed[6], seed[7]]),
         u32::from_le_bytes([seed[8], seed[9], seed[10], seed[11]]),

@@ -61,7 +61,7 @@ impl PartialOrd for Txo {
 
 impl hash::Hash for Txo {
     fn hash<H: hash::Hasher>(&self, h: &mut H) {
-        self.outpoint.hash(h)
+        self.outpoint.hash(h);
     }
 }
 

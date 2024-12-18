@@ -179,7 +179,7 @@ fn save_wallet<P: AsRef<Path>>(
 ) -> anyhow::Result<()> {
     let wallet_name = wallet_path.as_ref().to_string_lossy().into_owned();
     // Write out wallet
-    let tmp_name = wallet_name.clone() + ".tmp";
+    let tmp_name = format!("{}.tmp", wallet_name);
     let fh = fs::File::create(&tmp_name)?;
     wallet
         .write(fh, wallet_key, wallet_nonce)
