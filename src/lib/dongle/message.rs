@@ -84,14 +84,14 @@ impl Command for GetFirmwareVersion {
     }
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -216,14 +216,14 @@ impl Command for GetWalletPublicKey<'_> {
     }
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -266,7 +266,10 @@ impl Response for WalletPublicKey {
             });
         }
         let addr = String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned())?;
-        let cc_bytes: [u8; 32] = data[2 + pk_len + addr_len..].try_into().unwrap();
+        let cc_bytes: [u8; 32] = match data[2 + pk_len + addr_len..].try_into() {
+            Ok(cc) => cc,
+            Err(_) => return Err(Error::UnexpectedEof),
+        };
 
         Ok(WalletPublicKey {
             public_key: pk,
@@ -352,14 +355,14 @@ impl Command for SignMessagePrepare<'_, '_> {
     }
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -404,14 +407,14 @@ impl Command for SignMessageSign {
     }
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -457,14 +460,14 @@ impl Command for GetRandom {
     }
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -499,10 +502,8 @@ impl GetTrustedInput {
 
 impl Command for GetTrustedInput {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
-        // Done sending entire transaction
-        if self.ser_tx.is_empty() {
-            return None;
-        }
+        // If `self.ser_tx` is empty we are done sending entire transaction
+        let tx = self.ser_tx.pop()?;
 
         let mut ret = Vec::with_capacity(apdu_size);
         ret.push(ledger::BTCHIP_CLA);
@@ -513,7 +514,7 @@ impl Command for GetTrustedInput {
         if let Some(vout) = self.vout.take() {
             let _ = ret.write_u32::<BigEndian>(vout);
         }
-        ret.extend(self.ser_tx.pop().unwrap());
+        ret.extend(tx);
 
         // Mark size and return
         assert!(ret.len() < apdu_size);
@@ -523,14 +524,14 @@ impl Command for GetTrustedInput {
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
         // Note that only the last reply is nonempty for this one
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
@@ -571,10 +572,8 @@ impl UntrustedHashTransactionInputStart {
 
 impl Command for UntrustedHashTransactionInputStart {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
-        // Done sending everything
-        if self.ser_inputs.is_empty() {
-            return None;
-        }
+        // If `self.ser_inputs` is empty we are done sending entire transaction
+        let input = self.ser_inputs.pop()?;
 
         let mut ret = Vec::with_capacity(apdu_size);
         ret.push(ledger::BTCHIP_CLA);
@@ -582,7 +581,7 @@ impl Command for UntrustedHashTransactionInputStart {
         ret.push(if self.sent_first { 0x80 } else { 0x00 });
         ret.push(if self.first_input { 0x00 } else { 0x80 });
         ret.push(0x00); // Will overwrite this with final length
-        ret.extend(self.ser_inputs.pop().unwrap());
+        ret.extend(input);
 
         self.sent_first = true;
 
@@ -593,14 +592,15 @@ impl Command for UntrustedHashTransactionInputStart {
     }
 
     fn decode_reply(&mut self, data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        // In this case the reply length should be exactly 2 (0-length message, status word)
+        match data[..] {
+            [] | [_] => Err(Error::UnexpectedEof),
+            [sw1, sw2] => {
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::Unsupported),
         }
-        if data.len() > 2 {
-            return Err(Error::Unsupported);
-        }
-        self.sw = (u16::from(data[0]) << 8) + u16::from(data[1]);
-        Ok(())
     }
 
     // no reply to this message
@@ -634,10 +634,8 @@ impl UntrustedHashTransactionInputFinalize {
 
 impl Command for UntrustedHashTransactionInputFinalize {
     fn encode_next(&mut self, apdu_size: usize) -> Option<Vec<u8>> {
-        // Done sending everything
-        if self.ser_outputs.is_empty() {
-            return None;
-        }
+        // If `self.ser_outputs` is empty we are done sending entire transaction
+        let output = self.ser_outputs.pop()?;
 
         let mut ret = Vec::with_capacity(apdu_size);
         ret.push(ledger::BTCHIP_CLA);
@@ -658,7 +656,7 @@ impl Command for UntrustedHashTransactionInputFinalize {
             ret.push(0x00); // Will overwrite this with 0x80 on final message
             ret.push(0x00);
             ret.push(0x00); // Will overwrite this with length
-            ret.extend(self.ser_outputs.pop().unwrap());
+            ret.extend(output);
 
             if self.ser_outputs.is_empty() {
                 ret[2] = 0x80;
@@ -669,16 +667,17 @@ impl Command for UntrustedHashTransactionInputFinalize {
         }
     }
 
-    fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
+    fn decode_reply(&mut self, data: Vec<u8>) -> Result<(), Error> {
         // On the Nano S we only ever receive some variable number of zeros, at most
         // 2 of them, so check the length as a simple sanity check
-        if data.len() > 4 || data.len() < 2 {
-            return Err(Error::Unsupported);
+        match data[..] {
+            [] | [_] => Err(Error::UnexpectedEof),
+            [0, 0, sw1, sw2] | [0, sw1, sw2] | [sw1, sw2] => {
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::Unsupported),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     // no reply to this message
@@ -740,14 +739,14 @@ impl Command for UntrustedHashSign<'_> {
     }
 
     fn decode_reply(&mut self, mut data: Vec<u8>) -> Result<(), Error> {
-        if data.len() < 2 {
-            return Err(Error::UnexpectedEof);
+        match (data.pop(), data.pop()) {
+            (Some(sw2), Some(sw1)) => {
+                self.reply = data;
+                self.sw = u16::from_be_bytes([sw1, sw2]);
+                Ok(())
+            }
+            _ => Err(Error::UnexpectedEof),
         }
-        let sw2 = data.pop().unwrap();
-        let sw1 = data.pop().unwrap();
-        self.reply = data;
-        self.sw = (u16::from(sw1) << 8) + u16::from(sw2);
-        Ok(())
     }
 
     fn into_reply(self) -> (u16, Vec<u8>) {
