@@ -168,9 +168,9 @@ pub trait Dongle {
     }
 
     /// Gets the BIP32 fingerprint of the device's master key
-    fn get_master_xpub(&mut self) -> Result<bip32::ExtendedPubKey, Error> {
+    fn get_master_xpub(&mut self) -> Result<bip32::Xpub, Error> {
         let master_wpk = self.get_public_key(&[], false)?;
-        let master_xpub = bip32::ExtendedPubKey {
+        let master_xpub = bip32::Xpub {
             network: bitcoin::Network::Bitcoin,
             depth: 0,
             parent_fingerprint: bip32::Fingerprint::default(),

@@ -56,7 +56,7 @@ pub mod hid {
 /// Opaque cache of keys we've queried a dongle for
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyCache {
-    map: HashMap<bip32::ExtendedPubKey, HashMap<bip32::DerivationPath, secp256k1::PublicKey>>,
+    map: HashMap<bip32::Xpub, HashMap<bip32::DerivationPath, secp256k1::PublicKey>>,
 }
 
 impl KeyCache {
@@ -83,7 +83,7 @@ impl KeyCache {
     /// Looks up a key in the map
     fn lookup(
         &self,
-        xpub: bip32::ExtendedPubKey,
+        xpub: bip32::Xpub,
         path: &bip32::DerivationPath,
     ) -> Option<secp256k1::PublicKey> {
         self.map.get(&xpub).and_then(|map| map.get(path)).copied()
@@ -92,7 +92,7 @@ impl KeyCache {
     /// Adds a key to the map
     fn insert(
         &mut self,
-        xpub: bip32::ExtendedPubKey,
+        xpub: bip32::Xpub,
         path: bip32::DerivationPath,
         key: secp256k1::PublicKey,
     ) {

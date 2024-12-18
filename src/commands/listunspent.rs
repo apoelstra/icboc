@@ -51,14 +51,14 @@ impl super::Command for ListUnspent {
             .iter()
             .filter(|txo| txo.spent_data.is_none())
             .map(|txo| txo.value)
-            .sum::<u64>();
+            .sum::<bitcoin::Amount>();
 
         for txo in all_txos {
             if options.show_all || txo.spent_data.is_none() {
                 println!("{}", txo);
             }
         }
-        println!("Total balance: {}", bitcoin::Amount::from_sat(full_balance));
+        println!("Total balance: {}", full_balance);
         println!();
 
         Ok(())

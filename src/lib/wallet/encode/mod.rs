@@ -153,7 +153,7 @@ pub struct EncTxo {
     /// Outpoint of the TXO
     pub outpoint: bitcoin::OutPoint,
     /// Value of the TXO, in satoshis
-    pub value: u64,
+    pub value: bitcoin::Amount,
     /// If the TXO is spent, the txid that spent it
     pub spent: Option<bitcoin::Txid>,
     /// Blockheight at which the UTXO was created

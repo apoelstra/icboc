@@ -75,6 +75,7 @@ macro_rules! impl_bitcoin_consensus {
     };
 }
 
+impl_bitcoin_consensus!(bitcoin::Amount);
 impl_bitcoin_consensus!(bitcoin::OutPoint);
 impl_bitcoin_consensus!(bitcoin::Transaction);
 impl_bitcoin_consensus!(bitcoin::Txid);
@@ -172,7 +173,7 @@ impl Serialize for secp256k1::PublicKey {
     }
 }
 
-impl Serialize for bip32::ExtendedPubKey {
+impl Serialize for bip32::Xpub {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         w.write_all(&self.encode())
     }
@@ -180,8 +181,7 @@ impl Serialize for bip32::ExtendedPubKey {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let mut data = [0; 78];
         r.read_exact(&mut data[..])?;
-        bip32::ExtendedPubKey::decode(&data[..])
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        bip32::Xpub::decode(&data[..]).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
