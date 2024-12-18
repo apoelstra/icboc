@@ -19,9 +19,8 @@
 //!
 
 use core::cmp;
-use core::convert::TryInto;
+use core::convert::{TryFrom as _, TryInto as _};
 
-use byteorder::{BigEndian, WriteBytesExt};
 use miniscript::bitcoin;
 use miniscript::bitcoin::bip32;
 
@@ -210,7 +209,7 @@ impl Command for GetWalletPublicKey<'_> {
         ret.push((1 + 4 * self.bip32_path.len()) as u8);
         ret.push(self.bip32_path.len() as u8);
         for &childnum in self.bip32_path {
-            let _ = ret.write_u32::<BigEndian>(childnum.into());
+            ret.extend(u32::from(childnum).to_be_bytes());
         }
         Some(ret)
     }
@@ -331,9 +330,13 @@ impl Command for SignMessagePrepare<'_, '_> {
             ret.push(packet_len as u8);
             ret.push(self.bip32_path.len() as u8);
             for &childnum in self.bip32_path {
-                let _ = ret.write_u32::<BigEndian>(childnum.into());
+                ret.extend(u32::from(childnum).to_be_bytes());
             }
-            let _ = ret.write_u16::<BigEndian>(self.message.len() as u16);
+            ret.extend(
+                u16::try_from(self.message.len())
+                    .expect("message len < 2^16")
+                    .to_be_bytes(),
+            );
             ret.extend(&self.message[0..message_len]);
             self.sent_length += message_len;
             Some(ret)
@@ -512,7 +515,7 @@ impl Command for GetTrustedInput {
         ret.push(0x00);
         ret.push(0x00); // Will overwrite this with final length
         if let Some(vout) = self.vout.take() {
-            let _ = ret.write_u32::<BigEndian>(vout);
+            ret.extend(vout.to_be_bytes());
         }
         ret.extend(tx);
 
@@ -649,7 +652,7 @@ impl Command for UntrustedHashTransactionInputFinalize {
             ret.push((1 + 4 * cnums.len()) as u8);
             ret.push(cnums.len() as u8);
             for &childnum in cnums {
-                let _ = ret.write_u32::<BigEndian>(childnum.into());
+                ret.extend(u32::from(childnum).to_be_bytes());
             }
             Some(ret)
         } else {
@@ -730,10 +733,10 @@ impl Command for UntrustedHashSign<'_> {
         ret.push((1 + 4 * self.bip32_path.len() + 6) as u8);
         ret.push(self.bip32_path.len() as u8);
         for &childnum in self.bip32_path {
-            let _ = ret.write_u32::<BigEndian>(childnum.into());
+            ret.extend(u32::from(childnum).to_be_bytes());
         }
         ret.push(0x00); // user validation code
-        let _ = ret.write_u32::<BigEndian>(self.tx_locktime);
+        ret.extend(self.tx_locktime.to_be_bytes());
         ret.push(self.sighash.to_u32() as u8);
         Some(ret)
     }

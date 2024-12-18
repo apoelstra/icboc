@@ -17,8 +17,8 @@
 //! Specific support for Ledger-branded dongles
 //!
 
-use byteorder::{BigEndian, ByteOrder};
-use std::cmp;
+use core::cmp;
+use core::convert::TryFrom as _;
 use std::time::Duration;
 
 use crate::constants::apdu::ledger;
@@ -76,16 +76,17 @@ fn write_apdu(hid_dev: &hid::Device, mut data: &[u8]) -> Result<(), hid::Error> 
     while !data.is_empty() {
         let mut data_frame = [0u8; constants::apdu::ledger::PACKET_SIZE];
         // Write header
-        BigEndian::write_u16(
-            &mut data_frame[0..2],
-            constants::apdu::ledger::DEFAULT_CHANNEL,
-        );
+        data_frame[0..2].copy_from_slice(&constants::apdu::ledger::DEFAULT_CHANNEL.to_be_bytes());
         data_frame[2] = constants::apdu::ledger::TAG_APDU;
-        BigEndian::write_u16(&mut data_frame[3..5], sequence_no);
+        data_frame[3..5].copy_from_slice(&sequence_no.to_be_bytes());
 
         // First packet's header includes a two-byte length
         let header_len = if sequence_no == 0 {
-            BigEndian::write_u16(&mut data_frame[5..7], data.len() as u16);
+            data_frame[5..7].copy_from_slice(
+                &u16::try_from(data.len())
+                    .expect("length < 2^16")
+                    .to_be_bytes(),
+            );
             7
         } else {
             5
@@ -121,7 +122,7 @@ fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error>
         }
 
         // Sanity check the frame
-        let r_channel = BigEndian::read_u16(&data_frame[0..2]);
+        let r_channel = u16::from_be_bytes([data_frame[0], data_frame[1]]);
         if r_channel != ledger::DEFAULT_CHANNEL {
             return Err(Error::ApduWrongChannel {
                 expected: ledger::DEFAULT_CHANNEL,
@@ -135,7 +136,7 @@ fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error>
                 found: r_tag,
             });
         }
-        let r_sequence_no = BigEndian::read_u16(&data_frame[3..5]);
+        let r_sequence_no = u16::from_be_bytes([data_frame[3], data_frame[4]]);
         if r_sequence_no != sequence_no {
             return Err(Error::ApduWrongSequence {
                 expected: sequence_no,
@@ -146,7 +147,7 @@ fn read_apdu(hid_dev: &hid::Device, timeout: Duration) -> Result<Vec<u8>, Error>
         // Extract the message
         let header_len;
         if sequence_no == 0 {
-            receive_len = BigEndian::read_u16(&data_frame[5..7]).into();
+            receive_len = usize::from(u16::from_be_bytes([data_frame[5], data_frame[6]]));
             ret = Vec::with_capacity(receive_len);
             header_len = 7;
         } else {
