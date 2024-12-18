@@ -36,18 +36,18 @@ impl Bitcoind {
 
     /// Get the number of blocks the bitcoind is aware of
     pub fn getblockcount(&self) -> anyhow::Result<u64> {
-        Ok(self.rpc_client.call("getblockcount", &[])?)
+        Ok(self.rpc_client.call("getblockcount", None)?)
     }
 
     /// Get a block at a specified height
     pub fn getblock(&self, index: u64) -> anyhow::Result<bitcoin::Block> {
         let hash: sha256d::Hash = self
             .rpc_client
-            .call("getblockhash", &[arg(index)])
+            .call("getblockhash", Some(&arg(&[index])))
             .with_context(|| format!("getting hash of block {}", index))?;
         let hex: String = self
             .rpc_client
-            .call("getblock", &[arg(hash), arg(0)])
+            .call("getblock", Some(&arg((hash, 0))))
             .with_context(|| format!("getting hex of block {} ({})", index, hash))?;
         let bytes: Vec<u8> = hex::FromHex::from_hex(&hex)
             .with_context(|| format!("deserializing hex of block {} ({})", index, hash))?;

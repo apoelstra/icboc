@@ -19,7 +19,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.0"
-jsonrpc = { version ="0.14", optional = true }
+jsonrpc = { version ="0.18", optional = true }
 hidapi = "2.0"
 home = "0.5"
 miniscript = { version = "9.0", features = [ "serde" ] }
