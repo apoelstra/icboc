@@ -63,11 +63,15 @@ impl_int!(u64);
 macro_rules! impl_bitcoin_consensus {
     ($itype:ty) => {
         impl Serialize for $itype {
-            fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-                bitcoin::consensus::Encodable::consensus_encode(self, &mut w).map(|_| ())
+            fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+                let mut w = bitcoin::io::FromStd::new(w);
+                bitcoin::consensus::Encodable::consensus_encode(self, &mut w)
+                    .map(|_| ())
+                    .map_err(io::Error::from)
             }
 
-            fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+            fn read_from<R: Read>(r: R) -> io::Result<Self> {
+                let mut r = bitcoin::io::FromStd::new(r);
                 bitcoin::consensus::Decodable::consensus_decode(&mut r)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
             }
@@ -169,7 +173,10 @@ impl Serialize for secp256k1::PublicKey {
     }
 
     fn read_from<R: Read>(r: R) -> io::Result<Self> {
-        bitcoin::PublicKey::read_from(r).map(|key| key.inner)
+        let mut r = bitcoin::io::FromStd::new(r);
+        bitcoin::PublicKey::read_from(&mut r)
+            .map(|key| key.inner)
+            .map_err(io::Error::from)
     }
 }
 

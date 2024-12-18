@@ -171,7 +171,7 @@ pub trait Dongle {
     fn get_master_xpub(&mut self) -> Result<bip32::Xpub, Error> {
         let master_wpk = self.get_public_key(&[], false)?;
         let master_xpub = bip32::Xpub {
-            network: bitcoin::Network::Bitcoin,
+            network: bitcoin::NetworkKind::Main,
             depth: 0,
             parent_fingerprint: bip32::Fingerprint::default(),
             child_number: bip32::ChildNumber::Normal { index: 0 },

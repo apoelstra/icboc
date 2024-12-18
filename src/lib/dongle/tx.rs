@@ -48,7 +48,10 @@ pub fn encode<T: Encodable>(
     piece_len: usize,
 ) -> Vec<u8> {
     // Compute the new object's length
-    let len = obj.consensus_encode(&mut io::sink()).unwrap();
+    // FIXME shouldn't need from_std; see https://github.com/rust-bitcoin/rust-bitcoin/issues/3788
+    let len = obj
+        .consensus_encode(&mut bitcoin::io::from_std(io::sink()))
+        .unwrap();
     // Start a new piece if necessary
     if current_piece.len() + len > piece_len {
         pieces.push(current_piece);

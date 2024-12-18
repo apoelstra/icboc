@@ -30,7 +30,7 @@ pub enum Error {
     #[error("incorrect sequence no for APDU (expected {expected:?}, found {found:?})")]
     ApduWrongSequence { expected: u16, found: u16 },
     #[error("bitcoin")]
-    Bitcoin(#[from] bitcoin::key::Error),
+    Bitcoin(#[from] bitcoin::key::ParsePublicKeyError),
     #[error("no dongle detected")]
     DongleNotFound,
     #[error("more than one dongle detected")]
