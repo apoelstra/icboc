@@ -133,7 +133,8 @@ impl super::Command for ImportIcboc {
                     false,
                 )?
                 .chain_code;
-            let decrypted_entry = self::aes::aes256_decrypt_ctr(encryption_key, iv, entry);
+            let decrypted_entry =
+                self::aes::aes256_decrypt_ctr(encryption_key.to_bytes(), iv, entry);
 
             if decrypted_entry != [0; DECRYPTED_ENTRY_SIZE] {
                 let time = String::from_utf8(decrypted_entry[164..188].to_owned())

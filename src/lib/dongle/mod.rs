@@ -176,7 +176,7 @@ pub trait Dongle {
             parent_fingerprint: bip32::Fingerprint::default(),
             child_number: bip32::ChildNumber::Normal { index: 0 },
             public_key: master_wpk.public_key,
-            chain_code: master_wpk.chain_code.into(),
+            chain_code: master_wpk.chain_code,
         };
         Ok(master_xpub)
     }

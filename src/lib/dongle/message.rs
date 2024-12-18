@@ -18,10 +18,12 @@
 //! These are documented in the [btchip documentation](https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html)
 //!
 
+use core::cmp;
+use core::convert::TryInto;
+
 use byteorder::{BigEndian, WriteBytesExt};
 use miniscript::bitcoin;
 use miniscript::bitcoin::bip32;
-use std::cmp;
 
 use crate::constants::apdu::ledger::{self, Instruction};
 use crate::wallet;
@@ -237,7 +239,7 @@ pub struct WalletPublicKey {
     /// The base58-encoded address corresponding to the public key
     pub b58_address: String,
     /// The BIP32 chain code associated to this key
-    pub chain_code: [u8; 32],
+    pub chain_code: bip32::ChainCode,
 }
 
 impl Response for WalletPublicKey {
@@ -264,15 +266,13 @@ impl Response for WalletPublicKey {
             });
         }
         let addr = String::from_utf8(data[2 + pk_len..2 + pk_len + addr_len].to_owned())?;
+        let cc_bytes: [u8; 32] = data[2 + pk_len + addr_len..].try_into().unwrap();
 
-        let mut ret = WalletPublicKey {
+        Ok(WalletPublicKey {
             public_key: pk,
             b58_address: addr,
-            chain_code: [0; 32],
-        };
-        ret.chain_code
-            .clone_from_slice(&data[2 + pk_len + addr_len..]);
-        Ok(ret)
+            chain_code: bip32::ChainCode::from(cc_bytes),
+        })
     }
 }
 
