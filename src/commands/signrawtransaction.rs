@@ -125,7 +125,7 @@ impl super::Command for SignRawTransaction {
                 .with_context(|| format!("satisfying input {}", n))?;
 
             input.script_sig = script_sig;
-            input.witness = bitcoin::Witness::from_vec(wit);
+            input.witness = bitcoin::Witness::from_slice(&wit);
         }
 
         println!(
@@ -148,7 +148,7 @@ struct Satisfier<'tx, 'd, 'c, D> {
 }
 
 impl<D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'_, '_, '_, D> {
-    fn lookup_ecdsa_sig(&self, pk: &icboc::CachedKey) -> Option<ecdsa::EcdsaSig> {
+    fn lookup_ecdsa_sig(&self, pk: &icboc::CachedKey) -> Option<ecdsa::Signature> {
         let mut dongle = self.dongle.borrow_mut();
         dongle
             .transaction_input_start(
@@ -171,15 +171,17 @@ impl<D: Dongle> miniscript::Satisfier<icboc::CachedKey> for Satisfier<'_, '_, '_
             .ok()?;
         dongle
             .transaction_sign(
-                &pk.desc_key.full_derivation_path(),
-                bitcoin::EcdsaSighashType::All,
-                self.tx.lock_time.to_u32(),
+                &pk.desc_key
+                    .full_derivation_path()
+                    .expect("no multipath keys"),
+                bitcoin::sighash::EcdsaSighashType::All,
+                self.tx.lock_time.to_consensus_u32(),
             )
             .map_err(|e| {
                 println!("signing transaction input: {} {}", self.input_idx, e);
                 e
             })
             .ok()
-            .map(ecdsa::EcdsaSig::sighash_all)
+            .map(ecdsa::Signature::sighash_all)
     }
 }

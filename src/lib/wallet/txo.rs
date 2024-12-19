@@ -28,7 +28,7 @@ pub struct Txo {
     /// Outpoint of the TXO
     pub outpoint: bitcoin::OutPoint,
     /// Value of the TXO, in satoshis
-    pub value: u64,
+    pub value: bitcoin::Amount,
     /// Blockheight at which the UTXO was created. Can be changed
     /// when rescanning in case of reorg
     pub height: u64,
@@ -76,7 +76,7 @@ impl fmt::Display for Txo {
             f,
             "{{ outpoint: \"{}\", value: \"{}\", height: {}, address: \"{}\", descriptor: \"{}\", index: {}",
             self.outpoint,
-            bitcoin::Amount::from_sat(self.value),
+            self.value,
             self.height,
             address,
             self.address.descriptor.desc,

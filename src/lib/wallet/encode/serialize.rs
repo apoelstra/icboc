@@ -17,7 +17,7 @@
 //! Data types which can be read and written to the wallet backing store
 //!
 
-use miniscript::bitcoin::{self, hashes::Hash, secp256k1, util::bip32};
+use miniscript::bitcoin::{self, bip32, secp256k1};
 use std::io::{self, Read, Write};
 use std::str::FromStr;
 
@@ -39,90 +39,50 @@ pub trait Serialize: Sized {
     fn read_from<R: Read>(r: R) -> io::Result<Self>;
 }
 
-impl Serialize for u8 {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        w.write_all(&[*self])
-    }
+macro_rules! impl_int {
+    ($itype:ty) => {
+        impl Serialize for $itype {
+            fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+                w.write_all(&self.to_le_bytes())
+            }
 
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let mut dat = [0; 1];
-        r.read_exact(&mut dat)?;
-        Ok(dat[0])
-    }
+            fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
+                let mut dat = [0; core::mem::size_of::<$itype>()];
+                r.read_exact(&mut dat)?;
+                Ok(<$itype>::from_le_bytes(dat))
+            }
+        }
+    };
 }
 
-impl Serialize for u32 {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        w.write_all(&[
-            *self as u8,
-            (*self >> 8) as u8,
-            (*self >> 16) as u8,
-            (*self >> 24) as u8,
-        ])
-    }
+impl_int!(u8);
+impl_int!(u16);
+impl_int!(u32);
+impl_int!(u64);
 
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let mut dat = [0; 4];
-        r.read_exact(&mut dat)?;
-        Ok(u32::from(dat[0])
-            + (u32::from(dat[1]) << 8)
-            + (u32::from(dat[2]) << 16)
-            + (u32::from(dat[3]) << 24))
-    }
+macro_rules! impl_bitcoin_consensus {
+    ($itype:ty) => {
+        impl Serialize for $itype {
+            fn write_to<W: Write>(&self, w: W) -> io::Result<()> {
+                let mut w = bitcoin::io::FromStd::new(w);
+                bitcoin::consensus::Encodable::consensus_encode(self, &mut w)
+                    .map(|_| ())
+                    .map_err(io::Error::from)
+            }
+
+            fn read_from<R: Read>(r: R) -> io::Result<Self> {
+                let mut r = bitcoin::io::FromStd::new(r);
+                bitcoin::consensus::Decodable::consensus_decode(&mut r)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+            }
+        }
+    };
 }
 
-impl Serialize for u64 {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        (*self as u32).write_to(&mut w)?;
-        ((*self >> 32) as u32).write_to(w)
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let lo: u32 = Serialize::read_from(&mut r)?;
-        let hi: u32 = Serialize::read_from(r)?;
-        Ok((u64::from(lo)) + ((u64::from(hi)) << 32))
-    }
-}
-
-impl Serialize for miniscript::bitcoin::Txid {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        w.write_all(self)
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        let mut dat = [0; 32];
-        r.read_exact(&mut dat)?;
-        Ok(miniscript::bitcoin::Txid::from_inner(dat))
-    }
-}
-
-impl Serialize for miniscript::bitcoin::OutPoint {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        self.txid.write_to(&mut w)?;
-        self.vout.write_to(w)
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        Ok(miniscript::bitcoin::OutPoint {
-            txid: Serialize::read_from(&mut r)?,
-            vout: Serialize::read_from(r)?,
-        })
-    }
-}
-
-impl Serialize for miniscript::bitcoin::Transaction {
-    fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
-        // FIXME a later version of rust-bitcoin will just directly return io::Errors here
-        bitcoin::consensus::Encodable::consensus_encode(self, &mut w)
-            .map(|_| ())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    }
-
-    fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
-        bitcoin::consensus::Decodable::consensus_decode(&mut r)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    }
-}
+impl_bitcoin_consensus!(bitcoin::Amount);
+impl_bitcoin_consensus!(bitcoin::OutPoint);
+impl_bitcoin_consensus!(bitcoin::Transaction);
+impl_bitcoin_consensus!(bitcoin::Txid);
 
 impl<T: Serialize> Serialize for Vec<T> {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
@@ -213,11 +173,14 @@ impl Serialize for secp256k1::PublicKey {
     }
 
     fn read_from<R: Read>(r: R) -> io::Result<Self> {
-        bitcoin::PublicKey::read_from(r).map(|key| key.inner)
+        let mut r = bitcoin::io::FromStd::new(r);
+        bitcoin::PublicKey::read_from(&mut r)
+            .map(|key| key.inner)
+            .map_err(io::Error::from)
     }
 }
 
-impl Serialize for bip32::ExtendedPubKey {
+impl Serialize for bip32::Xpub {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         w.write_all(&self.encode())
     }
@@ -225,8 +188,7 @@ impl Serialize for bip32::ExtendedPubKey {
     fn read_from<R: Read>(mut r: R) -> io::Result<Self> {
         let mut data = [0; 78];
         r.read_exact(&mut data[..])?;
-        bip32::ExtendedPubKey::decode(&data[..])
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        bip32::Xpub::decode(&data[..]).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
@@ -272,7 +234,7 @@ impl Serialize for miniscript::Descriptor<miniscript::DescriptorPublicKey> {
     }
 }
 
-impl Serialize for bitcoin::Script {
+impl Serialize for bitcoin::ScriptBuf {
     fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         let len32: u32 = self.len() as u32;
         if self.len() > MAX_SCRIPTPUBKEY_SIZE as usize {
@@ -306,7 +268,7 @@ impl Serialize for bitcoin::Script {
         }
 
         r.read_exact(&mut ret)?;
-        Ok(bitcoin::Script::from(ret))
+        Ok(bitcoin::ScriptBuf::from(ret))
     }
 }
 

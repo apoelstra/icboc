@@ -51,7 +51,7 @@ pub struct Wallet {
     /// List of descriptors tracked by the wallet
     descriptors: Vec<Arc<Descriptor>>,
     /// Index from scriptpubkeys to addresses
-    spk_address: HashMap<bitcoin::Script, Arc<Address>>,
+    spk_address: HashMap<bitcoin::ScriptBuf, Arc<Address>>,
     /// Index from descriptor/index pairs to addresses
     descriptor_address: HashMap<(usize, u32), Arc<Address>>,
     /// Set of TXOs owned by the wallet
@@ -87,7 +87,7 @@ impl Wallet {
             tx_cache: enc_wallet
                 .tx_cache
                 .into_iter()
-                .map(|tx| (tx.txid(), tx))
+                .map(|tx| (tx.compute_txid(), tx))
                 .collect(),
         };
         // Copy descriptors into arcs
@@ -277,6 +277,7 @@ impl Wallet {
             index,
         };
         desc.translate_pk(&mut translator)
+            .map_err(|e| e.expect_translator_err("caching won't cause duplicate keys"))
     }
 
     /// Adds a new descriptor to the wallet. Returns the number of new keys
@@ -411,7 +412,7 @@ impl Wallet {
 
         for (vout, output) in tx.output.iter().enumerate() {
             if let Some(addr) = self.spk_address.get(&output.script_pubkey) {
-                let outpoint = bitcoin::OutPoint::new(tx.txid(), vout as u32);
+                let outpoint = bitcoin::OutPoint::new(tx.compute_txid(), vout as u32);
                 match self.txos.entry(outpoint) {
                     Entry::Vacant(v) => {
                         v.insert(Txo {
@@ -424,7 +425,7 @@ impl Wallet {
                     }
                     Entry::Occupied(mut o) => o.get_mut().height = height,
                 }
-                self.tx_cache.insert(tx.txid(), tx.clone());
+                self.tx_cache.insert(tx.compute_txid(), tx.clone());
                 received.insert(outpoint);
             }
         }
@@ -435,12 +436,12 @@ impl Wallet {
                     println!(
                         "Warning: {} is double-spent by {} (original transaction {})",
                         input.previous_output,
-                        tx.txid(),
+                        tx.compute_txid(),
                         data.txid,
                     );
                 }
                 txo.spent_data = Some(SpentData {
-                    txid: tx.txid(),
+                    txid: tx.compute_txid(),
                     height,
                 });
                 spent.insert(input.previous_output);
@@ -490,6 +491,12 @@ impl miniscript::MiniscriptKey for CachedKey {
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Sha256 = sha256::Hash;
+
+    // FIXME in miniscript 11 we can drop this since the trait gains a default impl.
+    // this function only returns a non-1 value if we were using BIP 389, which we do not.
+    fn num_der_paths(&self) -> usize {
+        1
+    }
 }
 
 impl miniscript::ToPublicKey for CachedKey {
@@ -525,7 +532,7 @@ impl<D: Dongle> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKe
     miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Error);
 
     fn pk(&mut self, pk: &miniscript::DescriptorPublicKey) -> Result<CachedKey, Error> {
-        let derived = pk.clone().at_derivation_index(self.index);
+        let derived = pk.clone().at_derivation_index(self.index).unwrap();
         Ok(CachedKey {
             key: Wallet::cache_key(self.dongle, self.key_cache, &derived)?,
             desc_key: derived,
@@ -550,7 +557,7 @@ impl miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallib
     miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Infallible);
 
     fn pk(&mut self, pk: &miniscript::DescriptorPublicKey) -> Result<CachedKey, Infallible> {
-        let derived = pk.clone().at_derivation_index(self.index);
+        let derived = pk.clone().at_derivation_index(self.index).unwrap();
         Ok(CachedKey {
             key: self.key_cache.lookup_descriptor_pubkey(&derived).unwrap(),
             desc_key: derived,

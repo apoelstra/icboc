@@ -44,13 +44,13 @@ impl super::Command for Info {
         let (key, _) = super::get_wallet_key_and_nonce(dongle)?;
         let wallet = super::open_wallet(&mut *dongle, &wallet_path, key)?;
 
-        let mut full_balance = 0;
+        let mut full_balance = bitcoin::Amount::ZERO;
         if wallet.n_descriptors() > 0 {
             println!("Descriptors:");
             for desc in wallet.descriptors() {
                 let txos = wallet.txos_for(desc.wallet_idx);
                 let mut n_spent = 0;
-                let mut balance = 0;
+                let mut balance = bitcoin::Amount::ZERO;
                 for txo in &txos {
                     if txo.spent_data.is_some() {
                         n_spent += 1;
@@ -61,7 +61,7 @@ impl super::Command for Info {
                 println!("  {:4} {}", desc.wallet_idx, desc.desc);
                 println!("       Range: {}-{}", desc.low, desc.high - 1);
                 println!("       TXOs: {} total, {} spent", txos.len(), n_spent);
-                println!("       Balance: {}", bitcoin::Amount::from_sat(balance));
+                println!("       Balance: {}", balance);
                 println!();
                 full_balance += balance;
             }
@@ -75,10 +75,7 @@ impl super::Command for Info {
             println!();
         }
         println!("Last rescan to: {}.", wallet.block_height());
-        println!(
-            "Wallet balance: {}",
-            bitcoin::Amount::from_sat(full_balance)
-        );
+        println!("Wallet balance: {}", full_balance);
         println!();
 
         Ok(())

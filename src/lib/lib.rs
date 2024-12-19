@@ -34,7 +34,7 @@ mod error;
 mod util;
 mod wallet;
 
-use miniscript::bitcoin::{secp256k1, util::bip32};
+use miniscript::bitcoin::{bip32, secp256k1};
 use miniscript::DescriptorPublicKey;
 use std::collections::HashMap;
 
@@ -56,7 +56,7 @@ pub mod hid {
 /// Opaque cache of keys we've queried a dongle for
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyCache {
-    map: HashMap<bip32::ExtendedPubKey, HashMap<bip32::DerivationPath, secp256k1::PublicKey>>,
+    map: HashMap<bip32::Xpub, HashMap<bip32::DerivationPath, secp256k1::PublicKey>>,
 }
 
 impl KeyCache {
@@ -70,20 +70,20 @@ impl KeyCache {
         &self,
         d: &miniscript::DefiniteDescriptorKey,
     ) -> Option<secp256k1::PublicKey> {
-        let d: DescriptorPublicKey = d.clone().into(); // FIXME https://github.com/rust-bitcoin/rust-miniscript/pull/492
-        match d {
+        match *d.as_descriptor_public_key() {
             DescriptorPublicKey::Single(ref single) => match single.key {
                 miniscript::descriptor::SinglePubKey::FullKey(key) => Some(key.inner),
                 miniscript::descriptor::SinglePubKey::XOnly(_) => todo!("No taproot support yet"),
             },
             DescriptorPublicKey::XPub(ref xpub) => self.lookup(xpub.xkey, &xpub.derivation_path),
+            DescriptorPublicKey::MultiXPub(..) => panic!("multi-xpubs (BIP 389) not supported"),
         }
     }
 
     /// Looks up a key in the map
     fn lookup(
         &self,
-        xpub: bip32::ExtendedPubKey,
+        xpub: bip32::Xpub,
         path: &bip32::DerivationPath,
     ) -> Option<secp256k1::PublicKey> {
         self.map.get(&xpub).and_then(|map| map.get(path)).copied()
@@ -92,7 +92,7 @@ impl KeyCache {
     /// Adds a key to the map
     fn insert(
         &mut self,
-        xpub: bip32::ExtendedPubKey,
+        xpub: bip32::Xpub,
         path: bip32::DerivationPath,
         key: secp256k1::PublicKey,
     ) {

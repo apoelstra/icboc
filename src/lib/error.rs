@@ -30,7 +30,7 @@ pub enum Error {
     #[error("incorrect sequence no for APDU (expected {expected:?}, found {found:?})")]
     ApduWrongSequence { expected: u16, found: u16 },
     #[error("bitcoin")]
-    Bitcoin(#[from] bitcoin::util::key::Error),
+    Bitcoin(#[from] bitcoin::key::ParsePublicKeyError),
     #[error("no dongle detected")]
     DongleNotFound,
     #[error("more than one dongle detected")]
@@ -47,8 +47,8 @@ pub enum Error {
     Miniscript(#[from] miniscript::Error),
     #[error("not our key (fingerprint {key_fingerprint} vs our fingerprint {our_fingerprint})")]
     NotOurKey {
-        our_fingerprint: bitcoin::util::bip32::Fingerprint,
-        key_fingerprint: bitcoin::util::bip32::Fingerprint,
+        our_fingerprint: bitcoin::bip32::Fingerprint,
+        key_fingerprint: bitcoin::bip32::Fingerprint,
     },
     #[error("hidapi")]
     Hid(#[from] hidapi::HidError),

@@ -17,8 +17,8 @@
 //! Abstract API for communicating with the device
 //!
 
+use miniscript::bitcoin::bip32;
 use miniscript::bitcoin::secp256k1::{self, ecdsa};
-use miniscript::bitcoin::util::bip32;
 use miniscript::{self, bitcoin};
 
 use self::message::{Command, Response};
@@ -39,14 +39,14 @@ pub struct TrustedInput {
     /// `get_trusted_input` call
     blob: [u8; 56],
     /// `ScriptPubKey` of the output being spent
-    script_pubkey: bitcoin::Script,
+    script_pubkey: bitcoin::ScriptBuf,
 }
 
 impl Default for TrustedInput {
     fn default() -> Self {
         TrustedInput {
             blob: [0; 56],
-            script_pubkey: bitcoin::Script::new(),
+            script_pubkey: bitcoin::ScriptBuf::new(),
         }
     }
 }
@@ -125,7 +125,7 @@ pub trait Dongle {
                 }
 
                 let fingerprint = key.master_fingerprint();
-                let key_full_path = key.full_derivation_path();
+                let key_full_path = key.full_derivation_path().expect("no multipath keys");
                 assert!(key_full_path.len() < 11); // limitation of the Nano S
 
                 // Check for fingerprint mismatch
@@ -161,19 +161,22 @@ pub trait Dongle {
                 );
                 Ok(dongle_xpub.public_key)
             }
+            miniscript::DescriptorPublicKey::MultiXPub(..) => {
+                panic!("multipath keys (BIP 389) not supported")
+            }
         }
     }
 
     /// Gets the BIP32 fingerprint of the device's master key
-    fn get_master_xpub(&mut self) -> Result<bip32::ExtendedPubKey, Error> {
+    fn get_master_xpub(&mut self) -> Result<bip32::Xpub, Error> {
         let master_wpk = self.get_public_key(&[], false)?;
-        let master_xpub = bip32::ExtendedPubKey {
-            network: bitcoin::Network::Bitcoin,
+        let master_xpub = bip32::Xpub {
+            network: bitcoin::NetworkKind::Main,
             depth: 0,
             parent_fingerprint: bip32::Fingerprint::default(),
             child_number: bip32::ChildNumber::Normal { index: 0 },
             public_key: master_wpk.public_key,
-            chain_code: master_wpk.chain_code[..].into(),
+            chain_code: master_wpk.chain_code,
         };
         Ok(master_xpub)
     }
@@ -301,7 +304,7 @@ pub trait Dongle {
     fn transaction_sign<P: AsRef<[bip32::ChildNumber]>>(
         &mut self,
         bip32_path: &P,
-        sighash: bitcoin::EcdsaSighashType,
+        sighash: bitcoin::sighash::EcdsaSighashType,
         tx_locktime: u32,
     ) -> Result<ecdsa::Signature, Error> {
         let command = message::UntrustedHashSign::new(bip32_path, sighash, tx_locktime);

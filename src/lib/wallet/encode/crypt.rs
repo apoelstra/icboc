@@ -55,8 +55,8 @@ impl<R: Read + Seek> CryptReader<R> {
         let tag = sha256::Hash::hash(b"icboc3d/wallet");
         let mut hmac_eng = HmacEngine::<sha256::Hash>::new(&key);
 
-        hmac_eng.input(&tag);
-        hmac_eng.input(&tag);
+        hmac_eng.input(tag.as_byte_array());
+        hmac_eng.input(tag.as_byte_array());
 
         let mut magic = [0; 4];
         r.read_exact(&mut magic)?;
@@ -98,7 +98,7 @@ impl<R: Read + Seek> CryptReader<R> {
 
         let mut hmac_read = [0; 32];
         r.read_exact(&mut hmac_read)?;
-        let hmac_read = Hmac::<sha256::Hash>::from_inner(hmac_read);
+        let hmac_read = Hmac::<sha256::Hash>::from_byte_array(hmac_read);
         let hmac_computed = Hmac::<sha256::Hash>::from_engine(hmac_eng);
         if hmac_read != hmac_computed {
             return Err(io::Error::new(
@@ -172,8 +172,8 @@ impl<W: io::Write> CryptWriter<W> {
         self.writer.write_all(&MAGIC_BYTES[..])?;
         self.writer.write_all(&self.nonce[..])?;
 
-        self.hmac_eng.input(&tag);
-        self.hmac_eng.input(&tag);
+        self.hmac_eng.input(tag.as_byte_array());
+        self.hmac_eng.input(tag.as_byte_array());
         self.hmac_eng.input(&MAGIC_BYTES[..]);
         self.hmac_eng.input(&self.nonce[..]);
 
